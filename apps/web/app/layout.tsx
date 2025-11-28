@@ -10,15 +10,15 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Vymalo Dashboard",
-  description: "Workspace-aware Next.js starter powered by Tailwind, shadcn/ui, and daisyUI.",
+  description: "Workspace-aware Next.js starter powered by Tailwind and shadcn/ui.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const authConfig = getAuthConfig();
 
   return (
-    <html lang="en" data-theme="corporate">
-      <body className={inter.className}>
+    <html lang="en">
+      <body className={`${inter.className} antialiased`}>
         <Providers config={authConfig}>
           <Navbar />
           <main className="container mx-auto px-4 pb-10 pt-6">{children}</main>

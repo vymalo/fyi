@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
 import { DashboardCard, PageHeader } from "../../../components/app-shell";
 import { getApiBaseUrl } from "../../../lib/env";
 
@@ -29,25 +29,34 @@ export default function ProjectsPage() {
         title="Projects"
         description="Manage your workspaces and related redirect links."
         cta={
-          <Button className="btn-sm" variant="secondary">
+          <Button size="sm" variant="secondary">
             Create project
           </Button>
         }
       />
       <DashboardCard title="Active projects">
         {isLoading ? (
-          <span className="loading loading-dots loading-md" aria-label="Loading projects" />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-foreground"
+              aria-label="Loading projects"
+            />
+            Loading projects...
+          </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-3">
             {data?.map((project) => (
-              <Card key={project.id} className="border-base-200">
+              <Card key={project.id}>
                 <CardHeader className="flex items-center justify-between">
                   <CardTitle>{project.name}</CardTitle>
-                  <span className="badge badge-outline">{project.linkCount} links</span>
+                  <Badge variant="outline">{project.linkCount} links</Badge>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-sm text-base-content/70">Project ID: {project.id}</p>
-                  <Link href={`/projects/${project.id}`} className="link link-primary text-sm">
+                <CardContent className="space-y-2 text-sm text-muted-foreground">
+                  <p>Project ID: {project.id}</p>
+                  <Link
+                    href={`/projects/${project.id}`}
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
                     Manage redirects
                   </Link>
                 </CardContent>

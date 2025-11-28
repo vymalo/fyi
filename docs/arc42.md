@@ -5,7 +5,7 @@ This document follows the Arc42 structure for the redirect and tracking platform
 ## Stack Assumptions
 
 - Monorepo: Turborepo + pnpm.
-- Frontend: Next.js (App Router) + Tailwind CSS + shadcn/ui + daisyUI + TanStack Query.
+- Frontend: Next.js (App Router) + Tailwind CSS + shadcn/ui primitives + TanStack Query.
 - Public API: NestJS.
 - Hot path: Rust (Axum) + SQLx.
 - Data: Postgres (Neon) + Redis.
@@ -82,7 +82,7 @@ This document follows the Arc42 structure for the redirect and tracking platform
 |-- packages/
 |   |-- auth/          # Better Auth config + helpers for Next/Nest
 |   |-- db/            # Prisma schema + migrations + Drizzle schema
-|   |-- ui/            # Shared shadcn/ui + daisyUI components
+|   |-- ui/            # Shared shadcn/ui-inspired components
 |   |-- types/         # Shared domain & DTO types
 |   |-- sdk-node/      # Generated Node client
 |   `-- config/        # tsconfig/eslint/tailwind configs
@@ -491,7 +491,6 @@ spec:
 - Next.js App Router: <https://nextjs.org/docs/app>
 - Tailwind CSS: <https://tailwindcss.com/>
 - shadcn/ui: <https://ui.shadcn.com/>
-- daisyUI: <https://daisyui.com/>
 - TanStack Query: <https://tanstack.com/query/latest/docs/framework/react/overview>
 - NestJS: <https://nestjs.com>
 - Axum: <https://docs.rs/axum/latest/axum/>

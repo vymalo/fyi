@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
 import { DashboardCard, PageHeader } from "../../../components/app-shell";
 import { getApiBaseUrl } from "../../../lib/env";
 
@@ -26,7 +26,7 @@ export default function LinksPage() {
         title="Links"
         description="Manage redirect destinations and keep projects organized."
         cta={
-          <Button className="btn-sm" variant="secondary">
+          <Button size="sm" variant="secondary">
             New link
           </Button>
         }
@@ -34,12 +34,12 @@ export default function LinksPage() {
       <DashboardCard title="Recent links">
         <div className="grid gap-3 md:grid-cols-2">
           {data?.map((link) => (
-            <Card key={link.id} className="border-base-200">
+            <Card key={link.id}>
               <CardHeader className="flex items-center justify-between">
                 <CardTitle>{link.url}</CardTitle>
-                <span className="badge badge-outline">{link.clicks} clicks</span>
+                <Badge variant="outline">{link.clicks} clicks</Badge>
               </CardHeader>
-              <CardContent className="text-sm text-base-content/70">
+              <CardContent className="text-sm text-muted-foreground">
                 <p>Project: {link.project}</p>
                 <p>Link ID: {link.id}</p>
               </CardContent>

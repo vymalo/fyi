@@ -1,6 +1,6 @@
 # Web App
 
-Next.js (App Router) dashboard scaffolded with Tailwind CSS, shadcn/ui primitives, daisyUI themes, TanStack Query, and Better Auth wiring.
+Next.js (App Router) dashboard scaffolded with Tailwind CSS, shadcn/ui primitives, TanStack Query, and Better Auth wiring.
 
 ## Scripts
 - `pnpm --filter web dev`

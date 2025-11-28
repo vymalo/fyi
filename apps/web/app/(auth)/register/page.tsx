@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
 import { PageHeader } from "../../../components/app-shell";
 
 export default function RegisterPage() {
@@ -9,16 +9,19 @@ export default function RegisterPage() {
         title="Create a workspace account"
         description="Auth routes are ready to connect to the Better Auth API."
         cta={
-          <Button>
+          <Button asChild variant="outline">
             <Link href="/login">Back to login</Link>
           </Button>
         }
       />
-      <Card className="border-base-200">
+      <Card>
         <CardHeader>
-          <CardTitle>Sign up is in progress</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Badge variant="secondary">Preview</Badge>
+            <span>Sign up is in progress</span>
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-base-content/80">
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
             Wire this page to your Better Auth instance and use the shared <code>@vymalo/auth</code> client to submit data to the
             API base URL configured in <code>.env.local</code>.

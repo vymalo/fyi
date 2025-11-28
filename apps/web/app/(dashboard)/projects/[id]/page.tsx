@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
 import { DashboardCard, PageHeader } from "../../../../components/app-shell";
 import { getApiBaseUrl } from "../../../../lib/env";
 
@@ -21,20 +21,20 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         title={`Project ${params.id}`}
         description={`Ready to fetch redirects from ${apiBase}/projects/${params.id}/links`}
         cta={
-          <Button variant="outline" className="btn-sm">
+          <Button asChild size="sm" variant="outline">
             <Link href="/projects">Back to projects</Link>
           </Button>
         }
       />
       <DashboardCard title="Recent redirects">
-        <Card className="border-base-200">
+        <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle>Link roll-up</CardTitle>
-            <span className="badge badge-outline">Sample data</span>
+            <Badge variant="outline">Sample data</Badge>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-base-content/80">
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>Use TanStack Query here to hydrate redirects for this project.</p>
-            <p className="text-base-content/70">API base URL is pulled from NEXT_PUBLIC_API_BASE_URL.</p>
+            <p>API base URL is pulled from NEXT_PUBLIC_API_BASE_URL.</p>
           </CardContent>
         </Card>
       </DashboardCard>

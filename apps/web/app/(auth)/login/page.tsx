@@ -1,8 +1,9 @@
 "use client";
 
 import type { FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@vymalo/ui";
+import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@vymalo/ui";
 import { useAuth } from "@vymalo/auth";
 
 function LoginForm() {
@@ -22,19 +23,19 @@ function LoginForm() {
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
-      <label className="form-control w-full">
-        <div className="label">
-          <span className="label-text">Email</span>
-        </div>
-        <input
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-foreground" htmlFor="email">
+          Email
+        </label>
+        <Input
+          id="email"
           name="email"
           type="email"
           defaultValue={session?.user.email}
           placeholder="you@example.com"
-          className="input input-bordered w-full"
           required
         />
-      </label>
+      </div>
       <Button className="w-full" type="submit">
         Continue
       </Button>
@@ -45,19 +46,24 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
-      <Card className="border-base-200">
+      <Card>
         <CardHeader>
           <CardTitle>Sign in to continue</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-base-content/70">
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p className="text-sm">
             Auth pages demonstrate routing and Better Auth client wiring. Provide any email to bootstrap a demo session.
           </p>
           <LoginForm />
         </CardContent>
       </Card>
-      <p className="text-sm text-base-content/70">
-        Looking for sign-up? Visit <a href="/register" className="link">create an account</a>.
+      <p className="text-sm text-muted-foreground">
+        Looking for sign-up? Visit
+        {" "}
+        <Link href="/register" className="text-primary underline-offset-4 hover:underline">
+          create an account
+        </Link>
+        .
       </p>
     </div>
   );
