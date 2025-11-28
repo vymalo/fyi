@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@vymalo/config/tsconfig",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "allowJs": true,
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "lib": ["dom", "dom.iterable", "es2021"],
+    "types": ["node", "react", "react-dom", "next"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@vymalo/ui": ["../../packages/ui/src"],
+      "@vymalo/auth": ["../../packages/auth/src"],
+      "@vymalo/config/*": ["../../packages/config/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+  "exclude": ["node_modules"]
+}

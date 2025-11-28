@@ -9,4 +9,5 @@ build
 dist
 .env
 .env.*
+!.env.local.example
 .DS_Store
