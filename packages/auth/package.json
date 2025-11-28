@@ -5,6 +5,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "better-auth": "^0.7.0"
+  },
   "peerDependencies": {
     "react": "^18.2.0"
   }

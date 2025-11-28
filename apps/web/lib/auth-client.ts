@@ -1,5 +1,5 @@
 import type { AuthClientConfig } from "@vymalo/auth";
-import { createAuthClient } from "@vymalo/auth";
+import { createBetterAuthClient } from "@vymalo/auth";
 import { getApiBaseUrl, getAuthApiKey, getAuthSecret } from "./env";
 
 export function getAuthConfig(): AuthClientConfig {
@@ -11,5 +11,5 @@ export function getAuthConfig(): AuthClientConfig {
 }
 
 export function buildAuthClient() {
-  return createAuthClient(getAuthConfig());
+  return createBetterAuthClient(getAuthConfig());
 }

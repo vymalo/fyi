@@ -2,6 +2,6 @@
 
 Shared Better Auth client wiring for frontend apps.
 
-- `createAuthClient` builds a fetch-friendly client using workspace env vars.
-- `AuthProvider` and `useAuth` expose session state to React components.
+- Uses `better-auth/client` under the hood to create a React-friendly auth client.
+- `AuthProvider` and `useAuth` expose session state through Better Auth's `useSession` hook.
 - Secrets and API keys are passed through `AuthClientConfig` and sourced in the web app from `.env.local`.

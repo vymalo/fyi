@@ -13,7 +13,7 @@ function LoginForm() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "");
-    const nextSession = await client.signIn(email);
+    const nextSession = await client.signIn.email({ email, password: "demo-password" });
 
     if (nextSession) {
       router.push("/");

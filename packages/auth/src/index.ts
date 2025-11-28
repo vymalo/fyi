@@ -1,2 +1,2 @@
-export type { AuthClient, AuthClientConfig, AuthContextValue, AuthSession, AuthUser } from "./client";
-export { AuthProvider, buildAuthHeaders, createAuthClient, useAuth } from "./client";
+export type { AuthClient, AuthClientConfig, AuthContextValue, AuthSession } from "./client";
+export { AuthProvider, buildAuthHeaders, createBetterAuthClient, useAuth } from "./client";
