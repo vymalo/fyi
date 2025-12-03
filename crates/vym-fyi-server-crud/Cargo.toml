@@ -17,6 +17,7 @@ oauth2.workspace = true
 mimalloc.workspace = true
 rand.workspace = true
 base64.workspace = true
+rocket_prometheus.workspace = true
 
 [dependencies.vym-fyi-model]
 workspace = true

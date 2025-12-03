@@ -1,14 +1,13 @@
 #[macro_use]
 extern crate log;
 
-use crate::flow::{FlowParams, run_oauth2_flow};
-use crate::shared::cli::Opt;
+use crate::shared::cli::{Command, Opt};
+use crate::shared::config::{ResolvedClient, load_client_config, resolve_client};
 use clap::Parser;
 use env_logger::{Builder, Env};
 use vym_fyi_model::models::errors::AppResult;
+use vym_fyi_model::services::http_client::HttpClient;
 
-mod flow;
-mod services;
 pub mod shared;
 
 /// Entry point: configures logging and runs the app workflow.
@@ -28,16 +27,30 @@ async fn main() {
     }
 }
 
-/// Orchestrates the CSR flow: stop agent, obtain token, validate claims,
-/// generate CSR and key, submit CSR, save cert+key, set agent name, restart agent.
 async fn app() -> AppResult<()> {
-    match Opt::try_parse() {
-        Ok(opt) => {
-            let params = FlowParams::from(opt);
-            run_oauth2_flow(&params).await?;
+    let opt = Opt::try_parse()?;
 
-            Ok(())
-        }
-        _ => Ok(()),
+    let config = load_client_config(&opt.config)?;
+    let resolved = resolve_client(&config, &opt.client)?;
+
+    match opt.command {
+        Command::Ping => ping(&resolved).await,
     }
+}
+
+async fn ping(client: &ResolvedClient) -> AppResult<()> {
+    let http = HttpClient::new_with_defaults()?;
+    let url = format!("{}/health", client.base_url.trim_end_matches('/'));
+
+    info!("Pinging CRUD server at {}", url);
+
+    let response = http
+        .client()
+        .get(&url)
+        .header("X-API-Key", &client.entry.api_key)
+        .send()
+        .await?;
+    info!("Received status: {}", response.status());
+
+    Ok(())
 }

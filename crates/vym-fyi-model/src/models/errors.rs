@@ -91,6 +91,9 @@ pub enum AppError {
     #[error("Parse JSON Error error: {0}")]
     SerdeError(#[from] serde_json::Error),
 
+    #[error("YAML parse error: {0}")]
+    YamlError(#[from] serde_yaml::Error),
+
     //#[error("Random generation error: {0}")]
     //RandOsError(#[from] rand_core::Error),
     #[error("Rand OS generation error: {0}")]
@@ -106,6 +109,12 @@ pub enum AppError {
     // CRL / OpenSSL FFI
     #[error("CRL/OpenSSL FFI error in {func}")]
     CrlFfi { func: &'static str },
+
+    #[error("Missing environment variable: {name}")]
+    MissingEnvVar { name: String },
+
+    #[error("Configuration error: {0}")]
+    Config(String),
 }
 
 // Convenience alias used where appropriate

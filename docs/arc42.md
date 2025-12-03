@@ -1,507 +1,321 @@
-# Arc42 Architecture (vymalo-fyi)
+# Arc42 – vymalo-fyi URL Shortener
 
-This document follows the Arc42 structure for the redirect and tracking platform.
+This document follows the Arc42 structure and describes the architecture of `vymalo-fyi`: a small, multi‑tenant URL shortener implemented purely in Rust.
 
-## Stack Assumptions
+The system consists of:
 
-- Monorepo: Turborepo + pnpm.
-- Frontend: Next.js (App Router) + Tailwind CSS + shadcn/ui + daisyUI + TanStack Query.
-- Public API: NestJS.
-- Hot path: Rust (Axum) + SQLx.
-- Data: Postgres (Neon) + Redis.
-- Auth: Better Auth (sessions and built-in API keys).
-- ORM / Migrations: Prisma (schema + migrations), Drizzle (TS ORM), SQLx (Rust).
-- Infra: Docker, Kubernetes (GKE), optional Knative for Rust redirects; db-migrator image + initContainers for migrations.
+- `vym-fyi-server-redirect`: redirect server (read‑only access to Postgres).
+- `vym-fyi-server-crud`: CRUD/API server (read/write access to Postgres).
+- `vym-fyi-client`: CLI tool that talks to the CRUD server using API keys from `config.yaml`.
+- `vym-fyi-model`: shared models and telemetry utilities.
+- `vym-fyi-healthcheck`: simple health probe used in containers.
+
+The services are packaged as containers and deployed on Kubernetes using the existing Dockerfile and Helm charts under `charts/`.
+
+---
 
 ## 1. Introduction and Goals
 
 ### 1.1 Requirements Overview
 
-- Short URLs and fast redirects.
-- Analytics dashboard (click stats, referrers, geo/device breakdown).
-- Public REST API and Node.js SDK.
-- Multi-tenant projects/workspaces with roles (owner/admin/member).
+- Shorten URLs and redirect users quickly to long target URLs.
+- Support multiple independent clients/tenants, each identified by an API key.
+- Provide a CRUD HTTP API for managing tenants, API keys, and short links.
+- Provide a CLI (`vym-fyi-client`) that uses a `config.yaml` with multiple clients to call the CRUD API.
+- Use a single Postgres database with:
+  - A read‑only DB role used only by the redirect server.
+  - A read/write DB role used only by the CRUD server.
+- Expose a `/metrics` endpoint on both servers, suitable for Prometheus scraping and Grafana dashboards.
+- Emit OpenTelemetry traces and metrics to an OTLP collector.
 
 ### 1.2 Quality Goals
 
-- Performance: p95 redirect latency - cache hit < 30 ms app time; cache miss < 80 ms app time.
-- Developer productivity: single monorepo with shared types/tooling; new feature lead time measured in days.
-- Reliability: 99.9% availability for redirect endpoints; safe DB migrations and rollbacks.
+- **Simplicity**: small number of binaries, minimal dependencies, and easy local/K8s operation.
+- **Performance**: low latency redirect path (no heavy logic in redirect server).
+- **Security**: isolation between tenants, strict separation of read‑only and read/write DB roles.
+- **Observability**: metrics and traces available for all main flows, including per‑tenant usage where possible.
+- **Operability**: predictable Docker/K8s deployment, health checks, and metrics endpoints.
 
 ### 1.3 Stakeholders
 
-- Product owner, backend engineers (NestJS/Rust), frontend engineers (Next.js), SRE/platform (GKE/Knative/Neon/Redis), end users, API integrators.
+- **Operators / SREs**: deploy and operate the services on Kubernetes and configure monitoring/alerting.
+- **API clients**: integrate against the CRUD API using API keys.
+- **CLI users**: manage tenants and short links via `vym-fyi-client`.
+- **Developers**: evolve the Rust code, DB schema, and observability.
+
+---
 
 ## 2. Architecture Constraints
 
-- Languages: TypeScript (Next.js, NestJS) and Rust (redirect service).
-- Frameworks: Next.js, NestJS, Axum (or Actix) with SQLx.
-- Auth: Better Auth for sessions, social login options, and API-key issuance/rotation (avoids custom hashing logic).
-- Database: Postgres (Neon); Prisma as schema and migration source of truth.
-- Monorepo: Turborepo + pnpm workspaces.
-- Deployment: Docker images to GKE; optional Knative for redirect autoscaling.
-- Dependencies: prefer libraries updated within 12 months or widely adopted/stable.
+- **Language**: Rust (edition 2024) for all code in this repo.
+- **Framework**: Rocket as the HTTP server framework for both CRUD and Redirect.
+- **Database**: Postgres as the only persistent store.
+- **Authentication**: API key–based machine auth only (no browser/session auth).
+- **Tenancy**: single shared database schema with `tenant_id` on all tenant‑scoped data.
+- **Metrics & tracing**:
+  - OpenTelemetry SDK for traces and metrics (see `vym-fyi-model`).
+  - `/metrics` endpoint per server for Prometheus scraping.
+- **Deployment**:
+  - Docker multi‑stage build via the root `Dockerfile` (targets `crud`, `redirect`, `healthcheck`).
+  - Kubernetes deployment via Helm charts per server.
+
+---
 
 ## 3. System Scope and Context
 
 ### 3.1 Business Context
 
-- Visitors click short links and are redirected.
-- Dashboard users configure links, projects, and custom domains.
-- API clients integrate via REST/Node SDK.
-- Better Auth manages users/sessions/API keys; monitoring/logging stack collects metrics, traces, logs.
+- End users access short URLs and are redirected to long URLs.
+- Each “client” of the system is modelled as a **tenant** with one or more API keys.
+- Tenants manage their own short links via the CRUD API or via the CLI.
 
 ### 3.2 Technical Context
 
-- Inbound via Kubernetes Ingress:
-  - `/r/:slug` -> Rust redirect service.
-  - `/api/*` -> NestJS API service.
-  - `/*` -> Next.js dashboard (SSR/static assets).
-- Outbound: Postgres (Neon), Redis (cache/rate limits), email/analytics providers (optional).
-
-## 4. Solution Strategy
-
-- Hybrid architecture: Rust for hot redirect path; NestJS for public API and business orchestration; Next.js for dashboard consuming the same API.
-- Single API surface: external consumers call NestJS and public redirect URLs only.
-- Single DB schema: Prisma defines schema and migrations; SQLx and Drizzle consume the generated schema (no ad-hoc migrations elsewhere).
-- Better Auth unified auth: shared package for Next/Nest; built-in API keys reduce bespoke machine-auth code.
-- OpenAPI from NestJS: feeds the generated Node SDK and shared contracts.
-
-## 5. Building Block View
-
-### 5.1 Monorepo Layout (illustrative)
-
-```
-/
-|-- apps/
-|   |-- web/           # Next.js dashboard
-|   |-- api/           # NestJS public API
-|   |-- redirect/      # Rust redirect service
-|   `-- db-migrator/   # DB migration runner image
-|
-|-- packages/
-|   |-- auth/          # Better Auth config + helpers for Next/Nest
-|   |-- db/            # Prisma schema + migrations + Drizzle schema
-|   |-- ui/            # Shared shadcn/ui + daisyUI components
-|   |-- types/         # Shared domain & DTO types
-|   |-- sdk-node/      # Generated Node client
-|   `-- config/        # tsconfig/eslint/tailwind configs
-|
-`-- infra/
-    |-- k8s/
-    |-- docker/
-    `-- ci/
-```
-
-### 5.2 Main Components
+High‑level context:
 
 ```mermaid
 graph LR
-  subgraph Apps
-    Web[Next.js Dashboard]
-    API[NestJS API]
-    Redirect[Rust Redirect]
+  subgraph Cluster
+    Ingress[Ingress / LB]
+    Crud[vym-fyi-server-crud]
+    Redirect[vym-fyi-server-redirect]
   end
-  subgraph Packages
-    Auth[packages/auth]
-    DB["packages/db (Prisma -> migrations)"]
-    SDK[packages/sdk-node]
-    UI[packages/ui]
-  end
-  subgraph Infra
-    PG[(Postgres/Neon)]
-    Cache[(Redis)]
-  end
-  Web --> API
-  API --> PG
-  Redirect --> PG
-  Redirect --> Cache
-  API --> Cache
-  API --> SDK
-  Web --> SDK
-  Web --> Auth
-  API --> Auth
+
+  CLI[vym-fyi-client] --> Crud
+  Ingress --> Crud
+  Ingress --> Redirect
+
+  Crud -->|read/write| DB[(Postgres)]
+  Redirect -->|read-only| DB
+
+  Crud --> OTEL[(OTel Collector)]
+  Redirect --> OTEL
+  OTEL --> Prom[(Prometheus)]
+  Prom --> Grafana[(Grafana)]
 ```
 
-#### Rust Redirect Service (`apps/redirect`)
+- Inbound traffic:
+  - `/api/*` → CRUD server.
+  - `/r/*` or `/{tenant}/{slug}` → Redirect server (exact routing is configurable).
+  - `/metrics` on each server → for Prometheus, not exposed publicly.
+- Outbound traffic:
+  - Both servers connect to Postgres using separate DB users.
+  - Both servers send OTLP telemetry to an OpenTelemetry Collector.
 
-- Responsibilities: handle `/r/:slug`; use Redis read-through cache; write click events to DB/queue.
-- Modules: `http` (Axum routes), `domain` (redirect logic), `infra` (SQLx repos, Redis client), `config` (env/logging).
+---
 
-Example:
+## 4. Solution Strategy
 
-```rust
-// apps/redirect/src/http/handlers.rs
-async fn redirect(
-    Path(slug): Path<String>,
-    Extension(state): Extension<AppState>,
-) -> Result<impl IntoResponse, RedirectError> {
-    if let Some(cached) = state.cache.get(&slug).await? {
-        return Ok(Redirect::temporary(cached.target_url));
-    }
+- **Two backends**:
+  - Redirect server:
+    - Handles only read‑only lookups of short links.
+    - Uses a read‑only Postgres role.
+    - Exposes `/metrics` with basic counters and latency histograms.
+  - CRUD server:
+    - Provides REST endpoints to manage tenants, API keys, and short links.
+    - Uses a read/write Postgres role.
+    - Exposes `/metrics` with HTTP, DB, and per‑tenant metrics.
+- **One CLI**:
+  - `vym-fyi-client` reads a local `config.yaml` containing multiple `clients`.
+  - Each client entry has a name, role, and API key (with optional `$(ENV_VAR)` placeholders).
+  - The CLI chooses a client entry and calls the CRUD API with the appropriate API key.
+- **Multi‑tenancy**:
+  - Each tenant corresponds to a logical client using the system.
+  - All tenant‑scoped data contains a `tenant_id` field.
+  - API keys are bound to tenants and roles; the CRUD server enforces isolation by tenant.
+- **Metrics & observability**:
+  - All main flows are instrumented via OpenTelemetry and exported via OTLP.
+  - `/metrics` exposes Prometheus‑compatible metrics on each server.
 
-    let link = state.repo.find_link_by_slug(&slug).await?;
-    state.cache.set(&slug, &link.target_url).await?;
-    state.tracker.log_click(&link.id, /* request metadata */).await?;
+---
 
-    Ok(Redirect::temporary(link.target_url))
-}
-```
+## 5. Building Block View
 
-#### NestJS API Service (`apps/api`)
+### 5.1 Workspace Structure
 
-- Responsibilities: public REST API (projects, links, stats, users, API keys), auth/authorization via Better Auth, OpenAPI for SDK, optional coordination with Rust.
+From `Cargo.toml`:
 
-```ts
-// apps/api/src/links/links.module.ts
-@Module({
-  imports: [DbModule, AuthModule],
-  controllers: [LinksController],
-  providers: [LinksService],
-})
-export class LinksModule {}
-```
+- `crates/vym-fyi-server-redirect`
+- `crates/vym-fyi-server-crud`
+- `crates/vym-fyi-client`
+- `crates/vym-fyi-model`
+- `crates/vym-fyi-healthcheck`
 
-#### Next.js Dashboard (`apps/web`)
+### 5.2 Responsibilities per Crate
 
-- Responsibilities: manage links/projects/domains; Better Auth sessions; TanStack Query to call `/api/*`.
+- **vym-fyi-server-redirect**
+  - Rocket HTTP server for redirect endpoints.
+  - Parses incoming requests into `{tenant_id, slug}` (based on host or path).
+  - Uses a read‑only Postgres connection to resolve `slug` → `target_url`.
+  - Emits redirect metrics and traces; exposes `/metrics`.
 
-```tsx
-// apps/web/app/dashboard/links/page.tsx
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
+- **vym-fyi-server-crud**
+  - Rocket HTTP server for CRUD endpoints, for example:
+    - `/api/tenants` – create/list tenants.
+    - `/api/api-keys` – create/rotate/revoke API keys.
+    - `/api/links` – manage short links.
+  - Auth middleware:
+    - Extracts API key from `X-API-Key` or `Authorization: ApiKey <key>`.
+    - Resolves API key to `{tenant_id, role}`.
+  - Enforces role‑based permissions (e.g. `admin` vs `url` role).
+  - Uses a read/write Postgres connection.
+  - Emits HTTP and DB metrics and traces; exposes `/metrics`.
 
-export default function LinksPage() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["links"],
-    queryFn: () => apiClient.links.list(),
-  });
+- **vym-fyi-client**
+  - CLI binary using `clap`.
+  - Reads `config.yaml`, resolves any `$(ENV_VAR)` placeholders in `api_key`.
+  - Provides commands to call CRUD endpoints (e.g. create/list links or tenants).
 
-  if (isLoading) return <div>Loading...</div>;
+- **vym-fyi-model**
+  - Shared domain structs (tenants, API keys, short links, errors).
+  - Shared telemetry utilities (e.g. `otel.rs` to set up traces and metrics).
+  - Shared HTTP client helpers and logging where appropriate.
 
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">Links</h1>
-      <ul className="space-y-2">
-        {data.items.map((link) => (
-          <li key={link.id} className="card bg-base-200 p-4">
-            <div className="font-mono">{link.shortUrl}</div>
-            <div className="text-sm text-base-content/70">-> {link.targetUrl}</div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-```
+- **vym-fyi-healthcheck**
+  - Simple binary used in container `HEALTHCHECK` commands to verify the environment or connectivity.
 
-#### `packages/db`
-
-- Prisma schema and migrations; Drizzle schema mirroring Prisma; SQLx query fixtures and/or schema docs.
-
-```prisma
-// packages/db/prisma/schema.prisma (excerpt)
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-
-  // Better Auth relations
-  sessions  Session[]
-  accounts  Account[]
-
-  projects  Project[]
-}
-
-model Project {
-  id        String   @id @default(cuid())
-  name      String
-  ownerId   String
-  owner     User     @relation(fields: [ownerId], references: [id])
-  links     Link[]
-}
-
-model Link {
-  id        String   @id @default(cuid())
-  slug      String   @unique
-  targetUrl String
-  project   Project  @relation(fields: [projectId], references: [id])
-  projectId String
-  createdAt DateTime @default(now())
-}
-```
+---
 
 ## 6. Runtime View
 
 ### 6.1 Redirect Flow
 
-Visitor hits `https://vym.fyi/r/abc123`:
+1. User requests a short URL (e.g. `https://short.example.com/t1/abc123`).
+2. Ingress forwards the request to the Redirect server.
+3. Redirect server:
+   - Parses `tenant_id` (`t1`) and `slug` (`abc123`) from the request.
+   - Queries Postgres using the read‑only pool for an active short link.
+   - Emits metrics (success/failure counters, latency) and tracing spans.
+   - Returns an HTTP redirect (e.g. `302`) to the target URL.
 
-1) Browser -> Ingress -> Rust redirect service.  
-2) Rust checks Redis.
-3) Cache hit: returns 302 and logs click asynchronously.
-4) Cache miss: reads Postgres (SQLx), populates Redis, logs click, returns 302.
+### 6.2 CRUD Flow via CLI
 
-```mermaid
-sequenceDiagram
-  participant Browser
-  participant Ingress
-  participant Redirect as Redirect (Rust)
-  participant Redis
-  participant Postgres
-  participant Tracker as Tracker/Log
+1. User runs `vym-fyi-client` with a selected client id, for example:
+   - `vym-fyi-client links create --client client-a --slug abc123 --target https://example.com`.
+2. CLI:
+   - Loads `config.yaml`.
+   - Selects `clients.client-a`.
+   - Resolves `api_key` by substituting any `$(ENV_VAR_NAME)` placeholders with environment variables.
+   - Sends a request to `server.base_url` with the resolved API key in headers.
+3. CRUD server:
+   - Validates the API key and looks up `{tenant_id, role}`.
+   - Checks authorization for the requested operation.
+   - Executes the DB operation and returns JSON.
+   - Emits metrics and tracing spans.
 
-  Browser->>Ingress: GET /r/:slug
-  Ingress->>Redirect: route request
-  Redirect->>Redis: get(slug)
-  alt Cache hit
-    Redis-->>Redirect: target url
-    Redirect->>Tracker: log click (async)
-    Redirect-->>Browser: 302 Location
-  else Cache miss
-    Redis-->>Redirect: null
-    Redirect->>Postgres: select link by slug
-    Postgres-->>Redirect: target url
-    Redirect->>Redis: set(slug, url)
-    Redirect->>Tracker: log click
-    Redirect-->>Browser: 302 Location
-  end
-```
+### 6.3 Metrics Flow
 
-### 6.2 Dashboard View Flow
+1. Both servers expose `GET /metrics` on their HTTP port.
+2. Prometheus scrapes these endpoints at regular intervals.
+3. Metrics are visualised in Grafana dashboards (e.g. per‑service, per‑route, per‑tenant where applicable).
+4. In parallel, OpenTelemetry exports traces and metrics via OTLP to a collector.
 
-1) User loads `/dashboard/links` in Next.js.
-2) Middleware/layout validates Better Auth session.
-3) React Query calls NestJS `/api/links`.
-4) NestJS validates session, loads data via Drizzle.
-5) JSON returned; React Query renders list.
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant Web as Next.js
-  participant API as NestJS API
-  participant Auth as Better Auth
-  participant DB as Postgres
-
-  User->>Web: GET /dashboard/links
-  Web->>Auth: validate session
-  Web->>API: GET /api/links (fetch)
-  API->>Auth: verify session/API token
-  API->>DB: query links/projects
-  DB-->>API: rows
-  API-->>Web: JSON links
-  Web-->>User: render list
-```
-
-### 6.3 API Consumer Flow
-
-```ts
-import { createClient } from "@vymalo/fyi-node";
-const client = createClient({ apiKey: process.env.REDIRECT_API_KEY });
-await client.links.create({
-  projectId: "proj_123",
-  slug: "promo-2026",
-  targetUrl: "https://some-website.example.com/landing",
-});
-```
-
-1) SDK calls NestJS `/api/links`.
-2) NestJS validates Better Auth API key and project permissions.
-3) Link is stored; response returns canonical resource.
-
-```mermaid
-sequenceDiagram
-  participant Integrator
-  participant SDK as Node SDK
-  participant API as NestJS API
-  participant Auth as Better Auth
-  participant DB as Postgres
-
-  Integrator->>SDK: links.create(...)
-  SDK->>API: POST /api/links (apiKey)
-  API->>Auth: validate API key (project scope)
-  API->>DB: insert link
-  DB-->>API: link row
-  API-->>SDK: JSON link
-  SDK-->>Integrator: short URL + metadata
-```
+---
 
 ## 7. Deployment View
 
-### 7.1 Artifacts
+### 7.1 Containers and Images
 
-- Docker images (published to GHCR): `redirect-service:<tag>`, `api-service:<tag>`, `web-app:<tag>`, `db-migrator:<tag>`.
-- Helm charts (published to GHCR OCI): one chart per service or a combined chart for app + ingress.
-- npm packages: shared workspace packages (e.g., `packages/sdk-node`, `packages/ui`, `packages/types`).
+- Multi‑stage `Dockerfile` builds:
+  - `vym-fyi-server-crud` (target: `crud`).
+  - `vym-fyi-server-redirect` (target: `redirect`).
+  - `vym-fyi-healthcheck`.
+- Runtime images use `gcr.io/distroless/static-debian12:nonroot` for a minimal surface area.
+- Containers are configured via environment variables (DB URLs, OTLP endpoint, Rocket settings, etc.).
 
-### 7.2 Kubernetes (GKE) Setup
+### 7.2 Kubernetes and Helm
 
-- Namespaces: `redirect-platform-prod`, `redirect-platform-staging`.
-- Services: `redirect-service` (Rust, optional Knative), `api-service` (NestJS), `web-app` (Next.js).
-- Ingress routes: `/r/*` -> redirect; `/api/*` -> API; `/*` -> web.
+- Separate Helm charts for each server:
+  - `charts/vym-fyi-server-crud`.
+  - `charts/vym-fyi-server-redirect`.
+- Typical K8s objects:
+  - `Deployment` per server (with liveness/readiness probes using `vym-fyi-healthcheck` or HTTP health).
+  - `Service` per server.
+  - `Ingress` or IngressRoute mapping external paths/hosts to the two services.
+- Metrics exposure:
+  - `/metrics` is exposed on the same Service ports, scraped by Prometheus within the cluster.
+  - Not exposed to the public internet.
 
-```mermaid
-graph LR
-  User((User))
-  Ingress[Ingress]
-  Redirect[Redirect svc (Rust)]
-  API[NestJS API svc]
-  Web[Next.js web]
-  Redis[(Redis)]
-  Postgres[(Postgres/Neon)]
+### 7.3 Supporting Components
 
-  User --> Ingress
-  Ingress -->|/r/*| Redirect
-  Ingress -->|/api/*| API
-  Ingress -->|/*| Web
-  Redirect --> Redis
-  Redirect --> Postgres
-  API --> Postgres
-  API --> Redis
-```
+- Postgres instance (managed or in‑cluster).
+- OpenTelemetry Collector for receiving OTLP from the Rust services.
+- Prometheus for scraping `/metrics`.
+- Grafana for dashboards.
 
-### 7.3 InitContainers for Migrations
+---
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-service
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: api-service
-  template:
-    metadata:
-      labels:
-        app: api-service
-    spec:
-      initContainers:
-        - name: db-migrate
-          image: registry.example.com/db-migrator:latest
-          envFrom:
-            - secretRef:
-                name: db-credentials
-      containers:
-        - name: api-service
-          image: registry.example.com/api-service:latest
-          envFrom:
-            - secretRef:
-                name: db-credentials
-          ports:
-            - containerPort: 3000
-```
-
-### 7.4 Build, Scan, and Release
-
-- Targets: linux/amd64 and linux/arm64 for all container images.
-- Rust: use `cross` to build release binaries for both arches before image packaging.
-- Next.js and NestJS: use Docker Buildx (or CI matrix) to build multi-arch images.
-- Security: scan every built image with Trivy before publishing.
-- Publication:
-  - Container images -> GHCR.
-  - Helm charts -> GHCR OCI registry.
-  - npm packages (workspace libs and SDK) -> npm registry.
-
-## 8. Cross-Cutting Concepts
+## 8. Cross‑Cutting Concepts
 
 ### 8.1 Authentication & Authorization
 
-- Better Auth centralizes user/session management and issues API keys (rotation/expiration) without custom hashing logic.
-- Next.js: Better Auth middleware + server helpers; sessions stored in Postgres via adapter.
-- NestJS: validates Better Auth tokens/API keys via `packages/auth`; guards + decorators (`@UseGuards(AuthGuard)`, `@CurrentUser()`).
-- Machine auth: Better Auth API keys bound to user/project; use Redis rate limits if needed.
+- Authentication:
+  - API keys are the only auth mechanism.
+  - Clients send `X-API-Key: <key>` or `Authorization: ApiKey <key>`.
+  - CRUD server stores only hashes of API keys in Postgres.
+- Authorization:
+  - Each API key is associated with a `tenant_id` and a `role`.
+  - Minimal roles:
+    - `admin`: full control of the tenant (manage keys, links, and tenant settings).
+    - `url`: limited to link management only.
+  - Permission checks are centralised in helper functions, not scattered across handlers.
 
-### 8.2 Validation
+### 8.2 Tenancy
 
-- NestJS: DTOs with `class-validator` / `class-transformer`.
-- Next.js: `zod` for forms and client validation.
-- Rust: typed inputs and error enums mapped to HTTP codes.
+- Tenants represent isolated clients using the system.
+- Every short link belongs to exactly one tenant.
+- CRUD server derives `tenant_id` from the API key.
+- Redirect server derives `tenant_id` from the request (host/path convention) and only reads rows with that `tenant_id`.
 
-### 8.3 Error Handling
+### 8.3 Configuration and `config.yaml`
 
-- Standard NestJS envelope:
+The CLI is configured via a YAML file with multiple clients. Example:
 
-```json
-{ "error": "BadRequest", "message": "Slug already exists", "statusCode": 400 }
+```yaml
+server:
+  base_url: https://crud.example.com
+
+clients:
+  client-a:
+    name: my-cli-client-a
+    api_key: "$(CLIENT_A_SECRET)"
+    role: admin
+
+  client-b:
+    name: my-cli-client-b
+    api_key: "$(CLIENT_B_SECRET)"
+    role: url
 ```
 
-- Rust: map domain errors to 4xx/5xx.
-- Next.js: TanStack Query error boundaries + toasts.
+- `server.base_url`: URL of the CRUD server.
+- `clients`: map of client ids; each id represents a client/tenant from the CLI perspective.
+- `api_key`:
+  - May contain placeholders like `$(CLIENT_A_SECRET)`.
+  - At runtime, the CLI replaces each `$(NAME)` with the value of environment variable `NAME`.
+  - This allows storing API keys in environment variables instead of on disk.
 
-### 8.4 Logging & Observability
+Server configuration is driven by environment variables, which are defined in deployment manifests and Helm values (e.g. DB URLs, OTLP endpoint, log level).
 
-- Structured logging: Rust `tracing`; NestJS `Logger`/pino-style.
-- Metrics: request counts, latency, errors, cache hit ratio, DB timings.
-- Tracing: OpenTelemetry across services.
+### 8.4 Observability
 
-### 8.5 Security
+- Tracing:
+  - `vym-fyi-model` provides OpenTelemetry setup.
+  - Each request is wrapped in a span; tenant id and route info can be attached as attributes.
+- Metrics:
+  - HTTP request counters and latency histograms per route.
+  - Redirect hit/miss counts.
+  - Basic DB metrics (errors, timeouts).
+  - Exposed via `/metrics` and exported via OTLP.
 
-- TLS at ingress; secrets via K8s Secrets or GCP Secret Manager.
-- Least privilege: separated read/write DB roles if needed.
-- Rate limiting: Redis-backed per API key/IP.
+---
 
-## 9. Architecture Decisions (ADR Summary)
+## 9. Glossary
 
-- ADR-001: Hybrid Rust + NestJS + Next.js (Rust for hot path, Next for dashboard, Nest for API).
-- ADR-002: Prisma as schema/migration source of truth; Drizzle and SQLx consume it.
-- ADR-003: Better Auth across services (sessions + API keys).
-- ADR-004: Monorepo with Turborepo + pnpm for shared tooling.
-- ADR-005: Separate db-migrator image for safer releases.
-- ADR-006: Dependency freshness policy (well-maintained, up-to-date libs).
-
-## 10. Quality Requirements / Scenarios
-
-### 10.1 Performance
-
-- Scenario: viral link (10k rps). Rust autoscaled via Knative/HPA; Redis hits dominate; Postgres protected with pooling and batched tracking. Success: 95% redirects < 50 ms (excl. network) and no DB exhaustion.
-
-### 10.2 Availability
-
-- Scenario: brief Neon outage. Cache hits keep working; cold slugs may 5xx with fallback page. Dashboard shows maintenance UI instead of crashing.
-
-### 10.3 Evolution
-
-- Scenario: add per-link A/B tests. Prisma schema change -> migration; Rust/Nest updated in one PR; feature toggles at project level.
-
-## 11. Risks and Technical Debt
-
-- Multi-ORM divergence (Prisma/Drizzle/SQLx). Mitigation: migrations only via Prisma; tests verify schemas.
-- Auth edge cases across Next/Nest. Mitigation: shared `packages/auth`, end-to-end auth tests.
-- Over-engineering early (three services). Mitigation: keep boundaries but run minimal replicas; avoid microservices inside each app.
-
-## 12. Glossary
-
-- Slug: short identifier mapped to a target URL.
-- Link: redirect entry with slug, target URL, metadata.
-- Project: container for a customer's links.
-- Visitor: anonymous end user clicking a short URL.
-- Better Auth: auth system managing users/sessions/API keys.
-- DB-migrator: dedicated image that runs DB migrations before services start.
-- HPA: Kubernetes Horizontal Pod Autoscaler.
-- Knative: K8s extension for serverless-style autoscaling.
-
-## 13. References
-
-- Turborepo: <https://turborepo.com/docs>
-- pnpm: <https://pnpm.io/>
-- Next.js App Router: <https://nextjs.org/docs/app>
-- Tailwind CSS: <https://tailwindcss.com/>
-- shadcn/ui: <https://ui.shadcn.com/>
-- daisyUI: <https://daisyui.com/>
-- TanStack Query: <https://tanstack.com/query/latest/docs/framework/react/overview>
-- NestJS: <https://nestjs.com>
-- Axum: <https://docs.rs/axum/latest/axum/>
-- SQLx: <https://github.com/launchbadge/sqlx>
-- Postgres (Neon): <https://neon.com/>
-- Redis: <https://redis.io/solutions/caching/>
-- Better Auth (sessions & API keys): <https://www.better-auth.com/docs/introduction>
-- Prisma: <https://www.prisma.io/orm>
-- Drizzle ORM: <https://orm.drizzle.team/docs/overview>
-- Docker: <https://docs.docker.com/>
-- Kubernetes: <https://kubernetes.io/docs/home/>
-- Knative: <https://knative.dev/docs/>
-- OpenTelemetry: <https://opentelemetry.io/docs/specs/otel/overview/>
+- **Tenant**: logical client of the system; owns short links and API keys.
+- **Client (CLI)**: entry in `config.yaml` corresponding to a tenant and an API key.
+- **Slug**: short identifier in a URL, mapped to a target URL.
+- **CRUD server**: `vym-fyi-server-crud` binary exposing the management API.
+- **Redirect server**: `vym-fyi-server-redirect` binary resolving and redirecting short URLs.
+- **API key**: secret used to authenticate a client; bound to a tenant and role.
+- **/metrics**: HTTP endpoint exposing Prometheus‑compatible metrics.
+- **OTLP**: OpenTelemetry protocol for exporting traces and metrics to a collector.

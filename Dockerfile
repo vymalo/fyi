@@ -31,10 +31,10 @@ RUN \
   --mount=type=bind,source=./Cargo.lock,target=/app/Cargo.lock \
   --mount=type=bind,source=./crates/vym-fyi-server-crud/Cargo.toml,target=/app/crates/vym-fyi-server-crud/Cargo.toml \
   --mount=type=bind,source=./crates/vym-fyi-server-crud/src,target=/app/crates/vym-fyi-server-crud/src \
-  --mount=type=bind,source=./crates/wazuh-cert-oauth2-model/Cargo.toml,target=/app/crates/wazuh-cert-oauth2-model/Cargo.toml \
-  --mount=type=bind,source=./crates/wazuh-cert-oauth2-model/src,target=/app/crates/wazuh-cert-oauth2-model/src \
-  --mount=type=bind,source=./crates/wazuh-cert-oauth2-client/Cargo.toml,target=/app/crates/wazuh-cert-oauth2-client/Cargo.toml \
-  --mount=type=bind,source=./crates/wazuh-cert-oauth2-client/src,target=/app/crates/wazuh-cert-oauth2-client/src \
+  --mount=type=bind,source=./crates/vym-fyi-model/Cargo.toml,target=/app/crates/vym-fyi-model/Cargo.toml \
+  --mount=type=bind,source=./crates/vym-fyi-model/src,target=/app/crates/vym-fyi-model/src \
+  --mount=type=bind,source=./crates/vym-fyi-client/Cargo.toml,target=/app/crates/vym-fyi-client/Cargo.toml \
+  --mount=type=bind,source=./crates/vym-fyi-client/src,target=/app/crates/vym-fyi-client/src \
   --mount=type=bind,source=./crates/vym-fyi-server-redirect/Cargo.toml,target=/app/crates/vym-fyi-server-redirect/Cargo.toml \
   --mount=type=bind,source=./crates/vym-fyi-server-redirect/src,target=/app/crates/vym-fyi-server-redirect/src \
   --mount=type=bind,source=./crates/vym-fyi-healthcheck/Cargo.toml,target=/app/crates/vym-fyi-healthcheck/Cargo.toml \

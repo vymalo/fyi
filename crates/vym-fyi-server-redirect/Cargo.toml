@@ -19,6 +19,7 @@ clap.workspace = true
 openssl-sys.workspace = true
 foreign-types.workspace = true
 url.workspace = true
+rocket_prometheus.workspace = true
 
 [dependencies.vym-fyi-model]
 features = ["rocket", "openssl"]

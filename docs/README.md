@@ -1,100 +1,127 @@
 # Developer Guide
 
-Entry point for working on this repo. For architecture, see `docs/arc42.md`.
+Entry point for working on this repo. For architecture details, see `docs/arc42.md`.
 
-## Stack quick view
-- Monorepo via Turborepo + pnpm.
-- Apps: Next.js dashboard (`apps/web`), NestJS API (`apps/api`), Rust redirect (`apps/redirect`), db-migrator (`apps/db-migrator`).
-- Data: Postgres (Neon in prod) + Redis cache.
-- Auth: Better Auth (sessions + built-in API keys) shared via `packages/auth`.
-- Schema: Prisma is the source of truth in `packages/db`; Drizzle and SQLx consume it.
+This repository contains a small, multi‑tenant URL shortener implemented as a Rust workspace with multiple binaries:
+
+- `vym-fyi-server-crud`: CRUD/API server for tenants, API keys, and short links.
+- `vym-fyi-server-redirect`: redirect server used on the hot path for resolving short URLs.
+- `vym-fyi-client`: CLI for calling the CRUD API using API keys from `config.yaml`.
+- `vym-fyi-model`: shared models and telemetry utilities.
+- `vym-fyi-healthcheck`: lightweight health probe binary for container health checks.
+
+The services are intended to run in containers and on Kubernetes, using the existing `Dockerfile`, `compose.yaml`, and Helm charts under `charts/`.
 
 ## Prerequisites
-- Node.js 20+ and pnpm 8+.
-- Rust stable (via rustup) for the redirect service.
-- Docker Desktop/Engine for local Postgres and Redis.
-- Optional: `just`/`make` if you add helper recipes.
+
+- Rust (stable toolchain via `rustup`, edition 2024 in this workspace).
+- Docker (for building/running images locally).
+- A Postgres instance (local container or managed DB).
+- Optional: `kubectl` and Helm for Kubernetes deployments.
 
 ## Initial setup
-1) Install JS deps: `pnpm install`
-2) Install Rust toolchain: `rustup default stable`
-3) Prepare environment files (example below) at the repo root for shared values and per-app overrides if needed.
 
-### Example `.env.local`
+1. Install Rust toolchain:
+   - `rustup default stable`
+2. Fetch dependencies and build once to warm the cache:
+   - `cargo build`
+3. Ensure you have a Postgres database available and note:
+   - Connection URL for the CRUD server (read/write user).
+   - Connection URL for the redirect server (read‑only user).
+
+Exact environment variables for DB configuration, telemetry, and HTTP settings are defined in the server crates and Helm chart values (see the `charts/` directory).
+
+## Running locally
+
+### Using Cargo
+
+You can run each server directly:
+
+- CRUD server:
+  - `cargo run -p vym-fyi-server-crud -- <args>`
+- Redirect server:
+  - `cargo run -p vym-fyi-server-redirect -- <args>`
+
+Both servers are Rocket applications; they respect `ROCKET_` environment variables (for example `ROCKET_ADDRESS`, `ROCKET_PORT`) and additional app‑specific environment variables for database URLs and telemetry.
+
+The healthcheck binary can be run as:
+
+- `cargo run -p vym-fyi-healthcheck`
+
+### Using Docker Compose
+
+The root `compose.yaml` defines services for CRUD and Redirect using the multi‑stage `Dockerfile`:
+
+- `crud` → builds and runs the `vym-fyi-server-crud` target.
+- `redirect` → builds and runs the `vym-fyi-server-redirect` target.
+
+You can start them with:
+
+- `docker compose up --build`
+
+You still need to provide a Postgres instance and appropriate environment variables (for example via Docker networking or a managed DB reachable from the containers).
+
+## CLI and `config.yaml`
+
+The `vym-fyi-client` crate provides a CLI that connects to the CRUD server using API keys defined in a YAML configuration file.
+
+A `config.yaml` is structured as follows:
+
+```yaml
+server:
+  base_url: https://crud.example.com
+
+clients:
+  client-a:
+    name: my-cli-client-a
+    api_key: "$(CLIENT_A_SECRET)"
+    role: admin
+
+  client-b:
+    name: my-cli-client-b
+    api_key: "$(CLIENT_B_SECRET)"
+    role: url
 ```
-# Postgres/Redis
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/vymalo
-REDIS_URL=redis://localhost:6379
 
-# Better Auth
-BETTER_AUTH_SECRET=dev-super-secret
-BETTER_AUTH_DATABASE_URL=${DATABASE_URL}
+- `server.base_url`: base URL for the CRUD API.
+- `clients`: map of client ids to client configuration; each client corresponds to a tenant.
+- `api_key`: may contain placeholders of the form `$(ENV_VAR_NAME)`; the CLI resolves these using environment variables at runtime.
 
-# API keys issued by Better Auth (machine access)
-# You can seed one manually in the DB while scaffolding the auth package.
-REDIRECT_API_KEY=replace-me
-```
+Typical usage:
 
-## Local services
-Use Docker Compose (example) to bring up Postgres and Redis:
-```
-version: "3.9"
-services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: vymalo
-    ports:
-      - "5432:5432"
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-```
-Run with `docker compose up -d` in the repo root (save as `docker-compose.yml`).
+- `vym-fyi-client ... --client client-a`
+  The CLI:
+  - Loads `config.yaml`.
+  - Selects `clients.client-a`.
+  - Resolves `api_key` (substituting any `$(ENV_VAR)` placeholders).
+  - Sends requests to `server.base_url` using that API key.
 
-## Database and migrations
-- Prisma schema lives in `packages/db/prisma/schema.prisma`.
-- Apply migrations locally (after Postgres is up):
-  - `pnpm --filter db prisma migrate dev`
-- Generate Prisma client and any Drizzle artifacts as you add them:
-  - `pnpm --filter db prisma generate`
-- SQLx: sync query metadata or docs from the same schema once the Rust app is in place.
+## Metrics and Observability
 
-## Running apps (expected once apps are scaffolded)
-- Next.js dashboard: `pnpm --filter web dev`
-- NestJS API: `pnpm --filter api start:dev`
-- Rust redirect: `cd apps/redirect && cargo run`
-- db-migrator image: build with `pnpm --filter db-migrator build` (or your chosen builder) and run as an initContainer in K8s.
+Both servers are instrumented with OpenTelemetry utilities from `vym-fyi-model`:
 
-> Note: command names may change depending on how you scaffold the packages; align package.json and Cargo.toml scripts accordingly.
+- Traces and metrics are exported via OTLP to an OpenTelemetry Collector endpoint.
+- Each server exposes a Prometheus‑compatible `/metrics` endpoint for scraping.
 
-## Lint, format, test (wire these scripts as you scaffold)
-- Lint: `pnpm lint`
-- Type-check: `pnpm typecheck`
-- Tests: `pnpm test`
-- Rust: `cargo fmt`, `cargo clippy`, `cargo test` in `apps/redirect`.
+In Kubernetes, a typical observability stack is:
 
-## Auth specifics (Better Auth)
-- Shared config in `packages/auth`; reuse it in Next.js and NestJS.
-- Sessions stored in Postgres via the Better Auth adapter.
-- API keys: use Better Auth's built-in API key support; bind keys to user/project rows and avoid custom hashing.
-- For local dev, seed a test user and API key directly in Postgres or via a seeding script.
+- OpenTelemetry Collector (receives OTLP from the services).
+- Prometheus (scrapes `/metrics` and/or the collector’s Prometheus exporter).
+- Grafana (dashboards for CRUD/Redirect metrics and traces).
 
-## API and SDK contract
-- Expose OpenAPI from the NestJS service (apps/api) once routes are defined.
-- Generate the Node SDK from that spec into `packages/sdk-node` (e.g., with `openapi-typescript` or `openapi-generator-cli`).
-- Share the generated client with the dashboard via pnpm workspace.
+## Testing, linting, formatting
 
-## CI/CD expectations
-- Run lint/typecheck/tests for JS/TS packages and fmt/clippy/test for Rust in CI.
-- Build Docker images for web/api/redirect/db-migrator as multi-arch (linux/amd64, linux/arm64); use `cross` for Rust binaries and Buildx for Node apps.
-- Scan all built images with Trivy before publishing.
-- Publish container images to GHCR and Helm charts (OCI) to GHCR; publish npm workspace packages (e.g., SDK/UI/types) to npm.
-- Run Prisma migrations in a db-migrator step (initContainer or pre-deploy hook) before rolling out services.
+- Format: `cargo fmt`
+- Lint: `cargo clippy --workspace --all-targets`
+- Tests: `cargo test --workspace`
+
+These commands should be wired into CI alongside security tooling:
+
+- `deny.toml` for `cargo-deny`.
+- `trivy.yaml` for container image scanning.
 
 ## Where to go next
-- Architecture details: `docs/arc42.md`.
-- Add ADRs under `docs/adr/` if decisions evolve.
+
+- Architecture and design: `docs/arc42.md`.
+- Charts and deployment: `charts/` for Helm charts of CRUD and Redirect servers.
+- Crate‑specific details: per‑crate `README.md` files under `crates/` (if present).

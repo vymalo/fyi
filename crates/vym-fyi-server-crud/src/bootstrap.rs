@@ -4,9 +4,11 @@ use vym_fyi_model::models::errors::{AppError, AppResult};
 use vym_fyi_model::services::http_client::HttpClient;
 
 use crate::handlers::health::health;
+use crate::handlers::links::{create_link, list_links};
 use crate::handlers::webhook::send_webhook;
 use crate::opts::Opt;
 use crate::state::{ProxyState, spawn_spool_processor};
+use rocket_prometheus::PrometheusMetrics;
 
 pub fn build_state(opt: &Opt) -> AppResult<ProxyState> {
     let http_client = HttpClient::new_with_defaults()?;
@@ -43,10 +45,14 @@ pub fn spawn_spool_bg(state: ProxyState) {
 }
 
 pub async fn launch_rocket(state: ProxyState) -> AppResult<()> {
+    let prometheus = PrometheusMetrics::new();
+
     rocket::build()
+        .attach(prometheus.clone())
         .manage(state)
         .mount("/", routes![health])
-        .mount("/api", routes![send_webhook])
+        .mount("/api", routes![send_webhook, create_link, list_links])
+        .mount("/metrics", prometheus)
         .launch()
         .await
         .map_err(|e| AppError::RocketError(Box::new(e)))?;

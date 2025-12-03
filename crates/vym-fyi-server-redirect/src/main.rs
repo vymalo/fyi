@@ -7,6 +7,7 @@ use crate::handlers::crl::{get_crl, get_revocations};
 use crate::handlers::health::health;
 use crate::handlers::register_agent::register_agent;
 use crate::handlers::revoke::revoke;
+use crate::handlers::short_link::redirect_short_link;
 use crate::models::oidc_state::OidcState;
 
 mod handlers;
@@ -18,6 +19,7 @@ use crate::shared::ledger::Ledger;
 use crate::shared::opts::Opt;
 use clap::Parser;
 use mimalloc::MiMalloc;
+use rocket_prometheus::PrometheusMetrics;
 use tracing::info;
 use vym_fyi_model::models::errors::{AppError, AppResult};
 use vym_fyi_model::services::http_client::HttpClient;
@@ -48,8 +50,10 @@ async fn main() -> AppResult<()> {
 
     // Shared HTTP client service with connection pooling
     let http_client = HttpClient::new_with_defaults()?;
+    let prometheus = PrometheusMetrics::new();
 
     rocket::build()
+        .attach(prometheus.clone())
         .manage(http_client.clone())
         .manage(OidcState::new(
             oauth_issuer,
@@ -66,8 +70,9 @@ async fn main() -> AppResult<()> {
         ))
         .manage(Ledger::new(ledger_path.into()).await?)
         .manage(CrlState::new(crl_path.into()).await?)
-        .mount("/", routes![health, get_crl])
+        .mount("/", routes![health, get_crl, redirect_short_link])
         .mount("/api", routes![register_agent, revoke, get_revocations])
+        .mount("/metrics", prometheus)
         .launch()
         .await
         .map_err(|e| AppError::RocketError(Box::new(e)))?;

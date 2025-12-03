@@ -1,54 +1,28 @@
-use crate::shared::path::{default_cert_path, default_key_path, default_server_ca_cert_path};
-use clap::ArgAction;
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
     version,
-    name = "Wazuh Cert Auth CLI",
-    about = "Wazuh Certificate Authority",
-    long_about = "Installs and configures Wazuh Certificate Authority"
+    name = "vym-fyi-client",
+    about = "CLI client for the vymalo URL shortener"
 )]
-pub enum Opt {
-    #[command(about = "Configure OAuth2 for Wazuh")]
-    OAuth2 {
-        #[arg(
-            env,
-            long,
-            default_value = "https://login.wazuh.adorsys.team/realms/adorsys"
-        )]
-        issuer: String,
+pub struct Opt {
+    /// Path to config.yaml (can also be set via VYM_FYI_CONFIG).
+    #[arg(long, short, env = "VYM_FYI_CONFIG", default_value = "config.yaml")]
+    pub config: PathBuf,
 
-        #[arg(env, long, short = 'a', default_value = "account")]
-        audience: String,
+    /// Client id to use from the `clients` map (can also be set via VYM_FYI_CLIENT).
+    #[arg(long, short, env = "VYM_FYI_CLIENT")]
+    pub client: String,
 
-        #[arg(env, long, short = 'i', default_value = "adorsys-machine-client")]
-        client_id: String,
+    #[command(subcommand)]
+    pub command: Command,
+}
 
-        #[arg(env, long, short = 's')]
-        client_secret: Option<String>,
-
-        #[arg(
-            env,
-            long,
-            short = 'e',
-            default_value = "https://cert.wazuh.adorsys.team/api/register-agent"
-        )]
-        endpoint: String,
-
-        #[arg(env, long, default_value_t = false, action = ArgAction::Set)]
-        is_service_account: bool,
-
-        #[arg(env, long, default_value_t = default_server_ca_cert_path(), short = 'r')]
-        ca_cert_path: String,
-
-        #[arg(env, long, default_value_t = default_cert_path(), short = 'c')]
-        cert_path: String,
-
-        #[arg(env, long, default_value_t = default_key_path(), short = 'k')]
-        key_path: String,
-
-        #[arg(env, long, default_value_t = true, action = ArgAction::Set, default_missing_value = "true", num_args = 0..=1)]
-        agent_control: bool,
-    },
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    /// Check connectivity to the CRUD server using the selected client.
+    Ping,
+    // Future subcommands: links, tenants, api-keys, etc.
 }
