@@ -1,0 +1,23 @@
+[package]
+name = "vym-fyi-server-crud"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tokio.workspace = true
+tracing.workspace = true
+rocket.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+oauth2.workspace = true
+mimalloc.workspace = true
+rand.workspace = true
+base64.workspace = true
+
+[dependencies.vym-fyi-model]
+workspace = true
+features = ["rocket"]

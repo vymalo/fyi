@@ -1,0 +1,50 @@
+services:
+  crud:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      target: crud
+    ports:
+      - "8000:8000"
+    environment:
+      RUST_LOG: "info"
+      ROCKET_ADDRESS: "0.0.0.0"
+
+      OAUTH_ISSUER: "http://host.docker.internal:9100/realms/dev"
+
+      ROOT_CA_PATH: "/data/root-ca.pem"
+      ROOT_CA_KEY_PATH: "/data/root-ca-key.pem"
+      LEDGER_PATH: "/data/ledger.csv"
+
+      CRL_PATH: "/data/issuing.crl"
+      CRL_DIST_URL: "http://localhost:8000/crl/issuing.crl"
+    healthcheck:
+      test: ["CMD", "/app/healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+  redirect:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      target: redirect
+    ports:
+      - "8100:8000"
+    environment:
+      RUST_LOG: "info"
+      ROCKET_ADDRESS: "0.0.0.0"
+
+      OAUTH_ISSUER: "http://host.docker.internal:9100/realms/dev"
+      OAUTH_CLIENT_ID: "test-client-secret"
+      OAUTH_CLIENT_SECRET: "some-secret"
+
+      SERVER_BASE_URL: "http://localhost:8000"
+    healthcheck:
+      test: ["CMD", "/app/healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+

@@ -1,0 +1,320 @@
+global:
+  domain: cert.example-wazuh.adorsys.com
+  version: latest
+
+cert:
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 1001
+      runAsGroup: 1001
+
+  controllers:
+    main:
+      type: deployment
+      replicas: 1
+      pod:
+        labels:
+          main: wazuh-cert-oauth2-app
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - wazuh-cert-oauth2-app
+                topologyKey: "kubernetes.io/hostname"
+      labels:
+        main: main-app
+      initContainers:
+        permission-fix:
+          enabled: false
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          image:
+            repository: busybox
+            tag: latest
+            pullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -ex
+
+              # Ensure the directory exists
+              chown -R 1001:1001 /usr/share/wazuh-cert-oauth2/data
+              chmod -R 775 /usr/share/wazuh-cert-oauth2/data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 10Mi
+            limits:
+              cpu: 100m
+              memory: 50Mi
+        ensure-ledger-csv:
+          enabled: true
+          image:
+            repository: busybox
+            tag: latest
+            pullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -ex
+              touch /usr/share/wazuh-cert-oauth2/data/ledger.csv
+          resources:
+            requests:
+              cpu: 50m
+              memory: 10Mi
+            limits:
+              cpu: 100m
+              memory: 50Mi
+        s3-init:
+          enabled: false
+          image:
+            repository: amazon/aws-cli
+            tag: latest
+            pullPolicy: IfNotPresent
+          env:
+            # Optional: static credentials can be injected via values or SecretRefs in overrides
+            # AWS_ACCESS_KEY_ID: ""
+            # AWS_SECRET_ACCESS_KEY: ""
+            # AWS_SESSION_TOKEN: ""
+            AWS_DEFAULT_REGION: "eu-central-1"
+            # Optional: set a custom S3 endpoint for S3-compatible storage (e.g., MinIO)
+            # AWS_ENDPOINT_URL: ""
+            # Either provide S3_URI directly or S3_BUCKET and optional S3_PREFIX
+            # S3_URI: "s3://my-bucket/path/to/issuing.crl"
+            # S3_BUCKET: "my-bucket"
+            # S3_PREFIX: "wazuh-cert/crl"
+            CRL_PATH: "/usr/share/wazuh-cert-oauth2/data/issuing.crl"
+          command:
+            - /bin/sh
+            - /opt/scripts/s3-init.sh
+      containers:
+        main:
+          image:
+            repository: ghcr.io/adorsys-gis/wazuh-cert-oauth2
+            tag: '{{ .Values.global.version }}'
+            pullPolicy: IfNotPresent
+
+          resources:
+            requests:
+              cpu: 125m
+              memory: 256Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
+
+          env:
+            RUST_LOG: 'warn'
+            ROCKET_ADDRESS: '0.0.0.0'
+
+            OAUTH_ISSUER: 'http://host.docker.internal/realms/dev'
+
+            ROOT_CA_PATH: '/usr/share/wazuh-cert-oauth2/certs/root-ca.pem'
+            ROOT_CA_KEY_PATH: '/usr/share/wazuh-cert-oauth2/certs/root-ca-key.pem'
+            LEDGER_PATH: '/usr/share/wazuh-cert-oauth2/data/ledger.csv'
+
+            CRL_PATH: '/usr/share/wazuh-cert-oauth2/data/issuing.crl'
+            CRL_DIST_URL: 'https://{{ .Values.global.version }}/crl/issuing.crl'
+
+          probes:
+            startup:
+              enabled: true
+              spec:
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            readiness:
+              enabled: true
+              custom: true
+              spec:
+                exec:
+                  command:
+                    - /app/healthcheck
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            liveness:
+              enabled: true
+              custom: true
+              spec:
+                exec:
+                  command:
+                    - /app/healthcheck
+                initialDelaySeconds: 0
+                periodSeconds: 5
+        s3-backup:
+          enabled: false
+          image:
+            repository: amazon/aws-cli
+            tag: latest
+            pullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          env:
+            # Optional: static credentials can be injected via values or SecretRefs in overrides
+            # AWS_ACCESS_KEY_ID: ""
+            # AWS_SECRET_ACCESS_KEY: ""
+            # AWS_SESSION_TOKEN: ""
+            AWS_DEFAULT_REGION: "eu-central-1"
+            # Optional: set a custom S3 endpoint for S3-compatible storage (e.g., MinIO)
+            # AWS_ENDPOINT_URL: ""
+            # Either provide S3_URI directly or S3_BUCKET and optional S3_PREFIX
+            # S3_URI: "s3://my-bucket/path/to/issuing.crl"
+            # S3_BUCKET: "my-bucket"
+            # S3_PREFIX: "wazuh-cert/crl"
+            CRL_PATH: "/usr/share/wazuh-cert-oauth2/data/issuing.crl"
+            S3_SYNC_INTERVAL: "30"
+          command:
+            - /bin/sh
+            - /opt/scripts/s3-backup.sh
+  service:
+    main:
+      enabled: true
+      annotations: { }
+      type: ClusterIP
+      controller: main
+      ports:
+        http:
+          enabled: true
+          port: 8000
+          targetPort: 8000
+
+  configMaps:
+    scripts:
+      enabled: false
+      data:
+        s3-backup.sh: |
+          set -euo pipefail
+
+          : "${CRL_PATH:=/usr/share/wazuh-cert-oauth2/data/issuing.crl}"
+          : "${S3_SYNC_INTERVAL:=30}"
+          if [ -z "${S3_URI:-}" ]; then
+            if [ -n "${S3_BUCKET:-}" ]; then
+              if [ -n "${S3_PREFIX:-}" ]; then
+                S3_URI="s3://${S3_BUCKET%/}/${S3_PREFIX%/}/issuing.crl"
+              else
+                S3_URI="s3://${S3_BUCKET%/}/issuing.crl"
+              fi
+            fi
+          fi
+
+          if [ -z "${S3_URI:-}" ]; then
+            echo "[s3-backup] No S3 destination configured (S3_URI or S3_BUCKET). Exiting." >&2
+            sleep 3600
+            exit 0
+          fi
+
+          echo "[s3-backup] Watching ${CRL_PATH} and syncing to ${S3_URI} every ${S3_SYNC_INTERVAL}s when changed"
+          prev_hash=""
+          while true; do
+            if [ -f "$CRL_PATH" ]; then
+              hash=$(sha256sum "$CRL_PATH" | awk '{print $1}')
+              if [ "$hash" != "$prev_hash" ]; then
+                aws s3 cp --only-show-errors "$CRL_PATH" "$S3_URI"
+                prev_hash="$hash"
+                echo "[s3-backup] Uploaded CRL to $S3_URI at $(date -Iseconds)"
+              fi
+            else
+              echo "[s3-backup] CRL not found at $CRL_PATH; waiting..."
+            fi
+            sleep "$S3_SYNC_INTERVAL"
+          done
+        s3-init.sh: |
+          #!/bin/sh
+          set -euo pipefail
+
+          : "${CRL_PATH:=/usr/share/wazuh-cert-oauth2/data/issuing.crl}"
+
+          # Build S3_URI from S3_BUCKET and optional S3_PREFIX if not provided
+          if [ -z "${S3_URI:-}" ]; then
+            if [ -n "${S3_BUCKET:-}" ]; then
+              if [ -n "${S3_PREFIX:-}" ]; then
+                S3_URI="s3://${S3_BUCKET%/}/${S3_PREFIX%/}/issuing.crl"
+              else
+                S3_URI="s3://${S3_BUCKET%/}/issuing.crl"
+              fi
+            fi
+          fi
+
+          if [ -z "${S3_URI:-}" ]; then
+            echo "[s3-init] No S3 destination configured (S3_URI or S3_BUCKET). Skipping restore." >&2
+            exit 0
+          fi
+
+          echo "[s3-init] Attempting to restore CRL from ${S3_URI} to ${CRL_PATH}"
+          if aws s3 ls "$S3_URI" >/dev/null 2>&1; then
+            aws s3 cp --only-show-errors "$S3_URI" "$CRL_PATH"
+            echo "[s3-init] Restored existing CRL from S3."
+          else
+            echo "[s3-init] No CRL found in S3. Skipping restore."
+          fi
+
+  ingress:
+    main:
+      enabled: false
+      annotations: { }
+      className: 'nginx'
+      hosts:
+        - host: '{{ .Values.global.domain }}'
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: main
+                port: http
+      tls: []
+#      tls:
+#        - secretName: 'tls-{{ .Values.global.domain }}-secret'
+#          hosts:
+#            - '{{ .Values.global.domain }}'
+
+  persistence:
+    data:
+      enabled: true
+      type: emptyDir
+      advancedMounts:
+        main:
+          permission-fix:
+            - path: /usr/share/wazuh-cert-oauth2/data
+          ensure-ledger-csv:
+            - path: /usr/share/wazuh-cert-oauth2/data
+          s3-init:
+            - path: /usr/share/wazuh-cert-oauth2/data
+          main:
+            - path: /usr/share/wazuh-cert-oauth2/data
+          s3-backup:
+            - path: /usr/share/wazuh-cert-oauth2/data
+    scripts:
+      enabled: false
+      type: configMap
+      identifier: scripts
+      advancedMounts:
+        main:
+          s3-init:
+            - path: /opt/scripts
+          s3-backup:
+            - path: /opt/scripts
+    certs:
+      enabled: true
+      type: secret
+      name: cert-secret
+      advancedMounts:
+        main:
+          main:
+            - path: /usr/share/wazuh-cert-oauth2/certs/root-ca.pem
+              subPath: root-ca.pem
+              readOnly: true
+            - path: /usr/share/wazuh-cert-oauth2/certs/root-ca-key.pem
+              subPath: root-ca-key.pem
+              readOnly: true

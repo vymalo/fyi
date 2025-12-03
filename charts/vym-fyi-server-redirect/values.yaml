@@ -1,0 +1,128 @@
+global:
+  version: latest
+
+webhook:
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 1001
+      runAsGroup: 1001
+
+  controllers:
+    app:
+      type: deployment
+      replicas: 1
+      pod:
+        labels:
+          main: vym-fyi-server-redirect
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - vym-fyi-server-redirect
+                topologyKey: "kubernetes.io/hostname"
+      labels:
+        main: main-app
+      containers:
+        app:
+          image:
+            repository: ghcr.io/adorsys-gis/vym-fyi-server-redirect
+            tag: '{{ .Values.global.version }}'
+            pullPolicy: IfNotPresent
+
+          resources:
+            requests:
+              cpu: 125m
+              memory: 256Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
+
+          env:
+            PORT: 8000
+            SERVER_BASE_URL: 'https://cert.adorsys'
+            SPOOL_DIR: '/var/cache/vym-fyi-server-redirect/spool'
+
+            RUST_LOG: 'warn'
+            ROCKET_ADDRESS: '0.0.0.0'
+
+            OAUTH_ISSUER: https://keycloak.login/realms/adorsys
+            OAUTH_CLIENT_ID:
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-oauth2-client-credentials
+                  key: client-id
+            OAUTH_CLIENT_SECRET:
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-oauth2-client-credentials
+                  key: client-secret
+            WEBHOOK_BASIC_USER:
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-basic-credentials
+                  key: user
+            WEBHOOK_BASIC_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-basic-credentials
+                  key: password
+
+          probes:
+            startup:
+              enabled: true
+              spec:
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            readiness:
+              enabled: true
+              custom: true
+              spec:
+                exec:
+                  command:
+                    - /app/healthcheck
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            liveness:
+              enabled: true
+              custom: true
+              spec:
+                exec:
+                  command:
+                    - /app/healthcheck
+                initialDelaySeconds: 0
+                periodSeconds: 5
+  service:
+    app:
+      enabled: true
+      annotations: { }
+      type: ClusterIP
+      controller: app
+      ports:
+        http:
+          enabled: true
+          port: 8000
+          targetPort: 8000
+
+  ingress:
+    app:
+      enabled: false
+      annotations: { }
+      className: 'nginx'
+      hosts:
+        - host: webhook.example-wazuh.adorsys.com
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: app
+                port: http
+      tls:
+        - secretName: webhook-example-wazuh-adorsys-com-secret
+          hosts:
+            - webhook.example-wazuh.adorsys.com

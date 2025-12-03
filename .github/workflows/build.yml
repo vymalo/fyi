@@ -1,0 +1,139 @@
+name: Build Docker image
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+    paths:
+      - '.github/workflows/build.yml'
+      - '../../crates/vym-fyi-server/**'
+      - 'crates/wazuh-cert-oauth2-metrics/**'
+      - '../../crates/vym-fyi-model/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Dockerfile'
+      - '.dockerignore'
+
+env:
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ADORSYS-GIS/wazuh-cert-oauth2
+
+jobs:
+  build:
+    name: Docker build for ${{ matrix.flavour }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavour:
+          - OAuth2
+          - Webhook
+        include:
+          - flavour: OAuth2
+            suffix: ""
+            docker_target: "oauth2"
+          - flavour: Webhook
+            suffix: "-webhook"
+            docker_target: "webhook"
+    permissions:
+      packages: write
+      contents: read
+      id-token: write # Required to sign SLSA provenance
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        name: Checkout repository
+        with:
+          fetch-depth: "0"
+          persist-credentials: 'false'
+
+      - name: Dockerfile scan (Trivy)
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          trivy-config: 'trivy.yaml'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          hide-progress: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
+
+      - name: Login to the Docker registry
+        id: login
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: lowercase
+        name: Lowercase image name
+        uses: AsZc/change-string-case-action@d0603cd0a7dd490be678164909f65c7737470a7f
+        with:
+          string: ${{ env.IMAGE_NAME }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893
+        with:
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value={{branch}}
+            type=schedule,pattern={{date 'YYYYMMDD-hhmmss' tz='Europe/Berlin'}}
+            type=sha,format=long
+            type=sha,format=long,prefix={{branch}}
+          images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.lowercase }}${{ matrix.suffix }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        if: github.event_name != 'pull_request'
+        with:
+          pull: true
+          context: .
+          file: "Dockerfile"
+          push: "true"
+          target: ${{ matrix.docker_target }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          platforms: linux/amd64
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+          provenance: true
+          sbom: true
+
+      - name: Set canonical image ref
+        id: img
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.lowercase }}${{ matrix.suffix }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REF: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.lowercase }}${{ matrix.suffix }}@${{ steps.build.outputs.digest }}
+        run: |
+          {
+            printf 'image=%s\n' "$IMAGE"
+            printf 'digest=%s\n' "$DIGEST"
+            printf 'ref=%s\n' "$REF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad
+
+      - name: Vulnerability scan (Trivy)
+        id: trivy
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
+        with:
+          image-ref: ${{ steps.img.outputs.ref }}
+          format: 'table'
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true

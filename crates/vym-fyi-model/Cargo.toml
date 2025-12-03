@@ -1,0 +1,34 @@
+[package]
+name = "vym-fyi-model"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+jsonwebtoken.workspace = true
+reqwest.workspace = true
+tracing.workspace = true
+rocket.workspace = true
+oauth2.workspace = true
+clap.workspace = true
+url.workspace = true
+rand_core.workspace = true
+
+[dependencies.tracing-subscriber]
+workspace = true
+optional = true
+
+[dependencies.openssl]
+workspace = true
+optional = true
+
+[features]
+rocket = [
+    "tracing-subscriber"
+]
