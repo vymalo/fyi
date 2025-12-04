@@ -1,9 +1,10 @@
+use axum::{
+    Json,
+    extract::{Query, State},
+    http::StatusCode,
+};
 use chrono::{DateTime, Utc};
-use rocket::State;
-use rocket::form::FromForm;
-use rocket::http::Status;
-use rocket::serde::json::Json;
-use rocket::serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use sqlx::QueryBuilder;
 use sqlx::Row;
 use tracing::{error, info};
@@ -26,7 +27,7 @@ pub struct LinkResponse {
 }
 
 /// Query parameters for listing links.
-#[derive(FromForm)]
+#[derive(Deserialize)]
 pub struct ListLinksQuery {
     pub page: Option<u32>,
     pub per_page: Option<u32>,
@@ -39,71 +40,16 @@ pub struct ListLinksQuery {
     pub expires_after: Option<String>,
 }
 
-/// Create a short link (skeleton, no persistence yet).
-#[post("/links", data = "<payload>")]
-pub async fn create_link(
-    payload: Json<CreateLinkRequest>,
-    auth: ApiKeyAuth,
-    app: &State<CrudApp>,
-) -> Result<(Status, Json<LinkResponse>), Status> {
-    let tenant_id = auth.tenant_id.ok_or(Status::Forbidden)?;
-
-    let req = payload.into_inner();
-    let repo = app.short_link_repository();
-    let result = match req.slug.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        Some(slug) => {
-            info!(
-                "Create link requested with slug={} target_url={}",
-                slug, req.target_url
-            );
-            repo.upsert(slug, &req.target_url, tenant_id).await
-        }
-        None => {
-            info!(
-                "Create link requested without slug; generating slug for target_url={}",
-                req.target_url
-            );
-            repo.create_with_generated_slug(&req.target_url, 6, tenant_id)
-                .await
-        }
-    }
-    .map_err(|e| {
-        error!("Database error inserting/updating short link: {}", e);
-        Status::InternalServerError
-    })?;
-
-    let response = LinkResponse {
-        slug: result.0,
-        target_url: result.1,
-        active: result.2,
-    };
-
-    Ok((Status::Created, Json(response)))
-}
-
 /// List short links.
-///
-/// - Non-master keys: only links for the caller's tenant are returned.
-/// - Master key: all links across all tenants are returned.
-/// Pagination:
-///   - `page` (1-based, default 1)
-///   - `per_page` (items per page, default 20, max 100)
-/// Additional filters:
-///   - `slug` (exact match)
-///   - `target_contains` (case-insensitive substring match on target URL)
-///   - `active` (true/false)
-///   - `created_before` / `created_after` (RFC3339 timestamps on creation time)
-///   - `expires_before` / `expires_after` (RFC3339 timestamps on expiry time)
-#[get("/links?<query..>")]
 pub async fn list_links(
+    State(app): State<CrudApp>,
     auth: ApiKeyAuth,
-    app: &State<CrudApp>,
-    query: ListLinksQuery,
-) -> Result<Json<Vec<LinkResponse>>, Status> {
+    Query(query): Query<ListLinksQuery>,
+) -> Result<Json<Vec<LinkResponse>>, StatusCode> {
     fn parse_rfc3339_opt(
         label: &str,
         value: &Option<String>,
-    ) -> Result<Option<DateTime<Utc>>, Status> {
+    ) -> Result<Option<DateTime<Utc>>, StatusCode> {
         match value.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             None => Ok(None),
             Some(raw) => DateTime::parse_from_rfc3339(raw)
@@ -111,7 +57,7 @@ pub async fn list_links(
                 .map(Some)
                 .map_err(|e| {
                     error!("Invalid {} timestamp '{}': {}", label, raw, e);
-                    Status::BadRequest
+                    StatusCode::BAD_REQUEST
                 }),
         }
     }
@@ -127,8 +73,8 @@ pub async fn list_links(
     let offset = ((page - 1) as i64) * (per_page as i64);
 
     info!(
-        "List links requested (page={}, per_page={}, is_master={})",
-        page, per_page, auth.is_master
+        "List links requested (page={}, per_page={}, is_master={}, tenant_id={:?})",
+        page, per_page, auth.is_master, auth.tenant_id
     );
 
     let mut qb = QueryBuilder::<sqlx::Postgres>::new(
@@ -138,7 +84,7 @@ pub async fn list_links(
     if auth.is_master {
         qb.push("TRUE");
     } else {
-        let tenant_id = auth.tenant_id.ok_or(Status::Forbidden)?;
+        let tenant_id = auth.tenant_id.ok_or(StatusCode::FORBIDDEN)?;
         qb.push("tenant_id = ").push_bind(tenant_id);
     }
 
@@ -190,7 +136,7 @@ pub async fn list_links(
 
     let rows = query.fetch_all(&app._pool).await.map_err(|e| {
         error!("Database error listing short links: {}", e);
-        Status::InternalServerError
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     let links = rows
@@ -203,4 +149,44 @@ pub async fn list_links(
         .collect();
 
     Ok(Json(links))
+}
+
+/// Create a short link (skeleton, no persistence yet).
+pub async fn create_link(
+    State(app): State<CrudApp>,
+    auth: ApiKeyAuth,
+    Json(req): Json<CreateLinkRequest>,
+) -> Result<(StatusCode, Json<LinkResponse>), StatusCode> {
+    let tenant_id = auth.tenant_id.ok_or(StatusCode::FORBIDDEN)?;
+
+    let repo = app.short_link_repository();
+    let result = match req.slug.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(slug) => {
+            info!(
+                "Create link requested with slug={} target_url={}",
+                slug, req.target_url
+            );
+            repo.upsert(slug, &req.target_url, tenant_id).await
+        }
+        None => {
+            info!(
+                "Create link requested without slug; generating slug for target_url={}",
+                req.target_url
+            );
+            repo.create_with_generated_slug(&req.target_url, 6, tenant_id)
+                .await
+        }
+    }
+    .map_err(|e| {
+        error!("Database error inserting/updating short link: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let response = LinkResponse {
+        slug: result.0,
+        target_url: result.1,
+        active: result.2,
+    };
+
+    Ok((StatusCode::CREATED, Json(response)))
 }

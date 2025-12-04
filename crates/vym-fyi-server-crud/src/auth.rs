@@ -1,11 +1,14 @@
-use rocket::http::Status;
-use rocket::request::{FromRequest, Outcome, Request};
-
 use crate::app::{ApiKeyBinding, CrudApp};
+use axum::{
+    extract::FromRequestParts,
+    http::{StatusCode, request::Parts},
+};
+use std::future::ready;
+use tracing::info;
 use vym_fyi_model::models::url_shortener::Role;
 
 /// Extracted information about the caller based on their API key.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ApiKeyAuth {
     #[allow(dead_code)]
     pub client_id: Option<String>,
@@ -53,35 +56,47 @@ fn find_binding<'a>(
     }
 }
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for ApiKeyAuth {
-    type Error = ();
+impl FromRequestParts<CrudApp> for ApiKeyAuth {
+    type Rejection = StatusCode;
 
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let Some(app) = req.rocket().state::<CrudApp>() else {
-            return Outcome::Error((Status::InternalServerError, ()));
-        };
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &CrudApp,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+        let client_id = parts
+            .headers
+            .get("X-Client-Id")
+            .and_then(|h| h.to_str().ok())
+            .map(str::to_owned);
+        info!("auth client_id={:?}", client_id);
 
-        let client_id = req.headers().get_one("X-Client-Id");
+        let api_key = parts
+            .headers
+            .get("X-API-Key")
+            .and_then(|h| h.to_str().ok())
+            .map(str::to_owned)
+            .or_else(|| {
+                parts
+                    .headers
+                    .get("Authorization")
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|h| h.strip_prefix("ApiKey "))
+                    .map(str::to_owned)
+            });
 
-        let api_key = req.headers().get_one("X-API-Key").or_else(|| {
-            req.headers()
-                .get_one("Authorization")
-                .and_then(|h| h.strip_prefix("ApiKey "))
-        });
+        let api_keys = state.api_keys.clone();
 
-        let Some(api_key) = api_key else {
-            return Outcome::Error((Status::Unauthorized, ()));
-        };
-
-        match find_binding(&app.api_keys, api_key, client_id) {
-            Some(binding) => Outcome::Success(ApiKeyAuth {
-                client_id: binding.client_id.clone(),
-                tenant_id: binding.tenant_id,
-                role: binding.role.clone(),
-                is_master: binding.is_master,
-            }),
-            None => Outcome::Error((Status::Forbidden, ())),
-        }
+        ready(match api_key {
+            Some(api_key) => match find_binding(&api_keys, &api_key, client_id.as_deref()) {
+                Some(binding) => Ok(ApiKeyAuth {
+                    client_id: binding.client_id.clone(),
+                    tenant_id: binding.tenant_id,
+                    role: binding.role.clone(),
+                    is_master: binding.is_master,
+                }),
+                None => Err(StatusCode::FORBIDDEN),
+            },
+            None => Err(StatusCode::UNAUTHORIZED),
+        })
     }
 }

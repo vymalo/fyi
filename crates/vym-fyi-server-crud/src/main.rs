@@ -1,11 +1,13 @@
-#[macro_use]
-extern crate rocket;
-
 use crate::app::{CrudApp, CrudAppBuilder};
 use crate::handlers::health::health;
 use crate::handlers::links::{create_link, list_links};
+use axum::{
+    Router,
+    routing::{get, post},
+};
+use axum_prometheus::PrometheusMetricLayer;
 use mimalloc::MiMalloc;
-use rocket_prometheus::PrometheusMetrics;
+use tokio::net::TcpListener;
 use tracing::info;
 use vym_fyi_model::models::errors::{AppError, AppResult};
 use vym_fyi_model::services::logging::setup_logging;
@@ -18,7 +20,7 @@ mod models;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-#[rocket::main]
+#[tokio::main]
 async fn main() -> AppResult<()> {
     setup_logging("vym-fyi-server-crud")?;
 
@@ -30,17 +32,38 @@ async fn main() -> AppResult<()> {
         .build()
         .await?;
 
-    let prometheus = PrometheusMetrics::new();
+    let (prometheus_layer, prometheus_handle) = PrometheusMetricLayer::pair();
+    let metrics_handle = prometheus_handle.clone();
 
-    rocket::build()
-        .attach(prometheus.clone())
-        .manage(app)
-        .mount("/", routes![health])
-        .mount("/api", routes![create_link, list_links])
-        .mount("/metrics", prometheus)
-        .launch()
-        .await
-        .map_err(|e| AppError::RocketError(Box::new(e)))?;
+    let router = Router::new()
+        .route("/health", get(health))
+        .route("/api/links", post(create_link).get(list_links))
+        .route(
+            "/metrics",
+            get(move || async move { metrics_handle.render() }),
+        )
+        .with_state(app.clone())
+        .layer(prometheus_layer);
+
+    let addr = bind_addr()?;
+    let listener = TcpListener::bind(addr).await?;
+    let local_addr = listener.local_addr().unwrap_or(addr);
+
+    info!("listening on {}", local_addr);
+
+    axum::serve(listener, router).await?;
 
     Ok(())
+}
+
+fn bind_addr() -> Result<std::net::SocketAddr, AppError> {
+    let host = std::env::var("ROCKET_ADDRESS").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port: u16 = std::env::var("ROCKET_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8000);
+
+    let addr = format!("{}:{}", host, port);
+    addr.parse()
+        .map_err(|e| AppError::Config(format!("invalid bind address {}: {}", addr, e)))
 }

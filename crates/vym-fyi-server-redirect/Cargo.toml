@@ -9,12 +9,13 @@ authors.workspace = true
 [dependencies]
 tokio.workspace = true
 tracing.workspace = true
-rocket.workspace = true
 serde.workspace = true
 mimalloc.workspace = true
-rocket_prometheus.workspace = true
 sqlx.workspace = true
+axum.workspace = true
+axum-prometheus.workspace = true
+tower.workspace = true
+hyper.workspace = true
 
 [dependencies.vym-fyi-model]
-features = ["rocket"]
 workspace = true

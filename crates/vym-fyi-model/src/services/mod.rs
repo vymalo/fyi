@@ -1,6 +1,5 @@
 pub mod http_client;
 
-#[cfg(feature = "rocket")]
 pub mod logging;
 
 pub mod config;

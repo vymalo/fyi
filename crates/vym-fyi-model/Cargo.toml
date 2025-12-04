@@ -8,32 +8,13 @@ authors.workspace = true
 
 [dependencies]
 serde.workspace = true
-serde_json.workspace = true
 serde_yaml.workspace = true
-anyhow.workspace = true
 thiserror.workspace = true
-jsonwebtoken.workspace = true
 reqwest.workspace = true
 tracing.workspace = true
-rocket.workspace = true
-oauth2.workspace = true
 clap.workspace = true
-url.workspace = true
 rand_core.workspace = true
 rand.workspace = true
 sqlx.workspace = true
 uuid.workspace = true
-chrono.workspace = true
-
-[dependencies.tracing-subscriber]
-workspace = true
-optional = true
-
-[dependencies.openssl]
-workspace = true
-optional = true
-
-[features]
-rocket = [
-    "tracing-subscriber"
-]
+tracing-subscriber.workspace = true

@@ -41,12 +41,12 @@ Data and persistence
 Logging
 
 - `tracing_subscriber` is initialized automatically; logs are emitted to stdout.
-- Control verbosity with `RUST_LOG` (e.g., `info,rocket=warn,reqwest=warn`). Defaults to `info` if unset.
+- Control verbosity with `RUST_LOG` (e.g., `info,hyper=warn,reqwest=warn`). Defaults to `info` if unset.
 
 Quick start
 
 ```bash
-export RUST_LOG=info,rocket=warn,reqwest=warn
+export RUST_LOG=info,hyper=warn,reqwest=warn
 
 wazuh-cert-oauth2-webhook \
   --server-base-url https://cert.wazuh.example \

@@ -48,7 +48,7 @@ The services are packaged as containers and deployed on Kubernetes using the exi
 ## 2. Architecture Constraints
 
 - **Language**: Rust (edition 2024) for all code in this repo.
-- **Framework**: Rocket as the HTTP server framework for both CRUD and Redirect.
+- **Framework**: Axum + Tower/Hyper as the HTTP server stack for both CRUD and Redirect.
 - **Database**: Postgres as the only persistent store.
 - **Authentication**: API key–based machine auth only (no browser/session auth).
 - **Tenancy**: single shared database schema with `tenant_id` on all tenant‑scoped data.
@@ -144,13 +144,13 @@ From `Cargo.toml`:
 ### 5.2 Responsibilities per Crate
 
 - **vym-fyi-server-redirect**
-  - Rocket HTTP server for redirect endpoints.
+  - Axum HTTP server for redirect endpoints.
   - Parses incoming requests into `{slug}` (optionally combined with host for multi‑tenant setups).
   - Uses a read‑only Postgres connection to resolve `slug` → `target_url`.
   - Emits redirect metrics and traces; exposes `/metrics`.
 
 - **vym-fyi-server-crud**
-  - Rocket HTTP server for CRUD endpoints, for example:
+  - Axum HTTP server for CRUD endpoints, for example:
     - `/api/tenants` – create/list tenants.
     - `/api/api-keys` – create/rotate/revoke API keys.
     - `/api/links` – manage short links.
@@ -221,7 +221,7 @@ From `Cargo.toml`:
   - `vym-fyi-server-redirect` (target: `redirect`).
   - `vym-fyi-healthcheck`.
 - Runtime images use `gcr.io/distroless/static-debian12:nonroot` for a minimal surface area.
-- Containers are configured via environment variables (DB URLs, OTLP endpoint, Rocket settings, etc.).
+- Containers are configured via environment variables (DB URLs, OTLP endpoint, HTTP bind settings like `ROCKET_ADDRESS`/`ROCKET_PORT` for compatibility, etc.).
 
 ### 7.2 Kubernetes and Helm
 
