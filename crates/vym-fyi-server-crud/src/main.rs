@@ -2,14 +2,15 @@ use crate::app::{CrudApp, CrudAppBuilder};
 use crate::handlers::health::health;
 use crate::handlers::links::{create_link, list_links};
 use axum::{
-    Router,
+    Router, middleware,
     routing::{get, post},
 };
-use axum_prometheus::PrometheusMetricLayer;
 use mimalloc::MiMalloc;
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing::info;
 use vym_fyi_model::models::errors::AppResult;
+use vym_fyi_model::services::axum_metrics::{prometheus_layer_default, record_ip_metrics};
 use vym_fyi_model::services::config::bind_addr_from_env;
 use vym_fyi_model::services::logging::setup_logging;
 
@@ -33,7 +34,7 @@ async fn main() -> AppResult<()> {
         .build()
         .await?;
 
-    let (prometheus_layer, prometheus_handle) = PrometheusMetricLayer::pair();
+    let (prometheus_layer, prometheus_handle) = prometheus_layer_default();
     let metrics_handle = prometheus_handle.clone();
 
     let router = Router::new()
@@ -44,7 +45,8 @@ async fn main() -> AppResult<()> {
             get(move || async move { metrics_handle.render() }),
         )
         .with_state(app.clone())
-        .layer(prometheus_layer);
+        .layer(prometheus_layer)
+        .layer(middleware::from_fn(record_ip_metrics));
 
     let addr = bind_addr_from_env(8000)?;
     let listener = TcpListener::bind(addr).await?;
@@ -52,7 +54,8 @@ async fn main() -> AppResult<()> {
 
     info!("listening on {}", local_addr);
 
-    axum::serve(listener, router).await?;
+    let service = router.into_make_service_with_connect_info::<SocketAddr>();
+    axum::serve(listener, service).await?;
 
     Ok(())
 }
