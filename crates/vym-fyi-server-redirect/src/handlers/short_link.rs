@@ -18,6 +18,8 @@ pub async fn redirect_short_link(
     State(app): State<RedirectApp>,
 ) -> Result<Redirect, StatusCode> {
     info!("Redirect requested: slug={}", slug);
+    let slug_counter = metrics::counter!("redirect_slug_requests_total", "slug" => slug.clone());
+    slug_counter.increment(1);
 
     let repo: ShortLinkRepository = app.short_link_repository();
     let result = repo.resolve(&slug).await;

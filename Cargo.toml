@@ -20,6 +20,7 @@ axum = { version = "0.8", features = ["json"] }
 axum-prometheus = "0.9"
 tower = "0.5"
 hyper = { version = "1", features = ["full"] }
+metrics = "0.24"
 
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "gzip", "brotli", "deflate"] }
 log = { version = "0.4", features = ["std"] }
