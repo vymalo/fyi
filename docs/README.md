@@ -65,36 +65,121 @@ You still need to provide a Postgres instance and appropriate environment variab
 
 The `vym-fyi-client` crate provides a CLI that connects to the CRUD server using API keys defined in a YAML configuration file.
 
-A `config.yaml` is structured as follows:
+You can use the same YAML structure for:
+- Local CLI usage (for example `./config/config.yaml`), and
+- The tenants file used by the CRUD server in Docker (`.docker/tenants.yaml`).
+
+### Tenant / client configuration file
+
+At minimum, a config file looks like this:
 
 ```yaml
 server:
-  base_url: https://crud.example.com
+  base_url: http://localhost:8000
+  master_api_key: "$(MASTER_API_KEY)"  # optional, for admin operations
 
 clients:
   client-a:
-    name: my-cli-client-a
+    name: client-a
     api_key: "$(CLIENT_A_SECRET)"
     role: admin
 
   client-b:
-    name: my-cli-client-b
+    name: client-b
     api_key: "$(CLIENT_B_SECRET)"
     role: url
 ```
 
 - `server.base_url`: base URL for the CRUD API.
-- `clients`: map of client ids to client configuration; each client corresponds to a tenant.
+- `server.master_api_key`: optional master API key used for administrative operations from the CLI (also supports `$(ENV_VAR_NAME)` placeholders).
+- `clients`: map of client ids to client configuration; each client corresponds to a tenant (the key, e.g. `client-a`, is used as the tenant name when the CRUD server syncs tenants).
+- `name`: human-readable name for the client; typically the same as the key.
 - `api_key`: may contain placeholders of the form `$(ENV_VAR_NAME)`; the CLI resolves these using environment variables at runtime.
+- `role`:
+  - `admin`: full management capabilities for that tenant (intended for automation/ops).
+  - `url`: limited scope, mainly for creating and managing links.
 
-Typical usage:
+To use environment placeholders, export the variables before running anything, for example:
 
-- `vym-fyi-client ... --client client-a`
-  The CLI:
-  - Loads `config.yaml`.
-  - Selects `clients.client-a`.
-  - Resolves `api_key` (substituting any `$(ENV_VAR)` placeholders).
-  - Sends requests to `server.base_url` using that API key.
+```bash
+export MASTER_API_KEY="super-admin-key"
+export CLIENT_A_SECRET="client-a-key"
+export CLIENT_B_SECRET="client-b-key"
+```
+
+### How the tenants file is used
+
+- In Docker, the CRUD server uses `.docker/tenants.yaml` (mounted as `/config/tenants.yaml` in `compose.yaml`) as its tenant configuration file.
+- On startup, the server:
+  - Reads `TENANTS_CONFIG_PATH` (points to `/config/tenants.yaml`).
+  - Creates tenants in the database for every client id found under `clients`.
+  - Deletes any tenants from the database whose name is no longer present in the file.
+- You can think of the tenants file as the source of truth for which tenants exist in the system.
+
+If you add a new client entry to `.docker/tenants.yaml` and restart the CRUD container, a new tenant row will be created automatically.
+
+### CLI usage (step by step, noobs welcome)
+
+1. **Prepare a config file for the CLI**
+
+   You can reuse `.docker/tenants.yaml` or create a dedicated file such as `config/config.yaml` with the same structure as shown above.
+
+2. **Export the environment variables for your keys**
+
+   ```bash
+   export MASTER_API_KEY="super-admin-key"
+   export CLIENT_A_SECRET="client-a-key"
+   export CLIENT_B_SECRET="client-b-key"
+   ```
+
+3. **Start the stack with Docker Compose**
+
+   From the repository root:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   This will start:
+   - Postgres (`db`)
+   - CRUD server (`crud`)
+   - Redirect server (`redirect`)
+
+4. **Ping the CRUD server using a client API key**
+
+   From another terminal, still in the repo root:
+
+   ```bash
+   cargo run -p vym-fyi-client -- \
+     --config .docker/tenants.yaml \
+     --client client-a \
+     ping
+   ```
+
+   What happens:
+   - The CLI loads `.docker/tenants.yaml`.
+   - It selects `clients.client-a`.
+   - It replaces `$(CLIENT_A_SECRET)` with the value of the `CLIENT_A_SECRET` environment variable.
+   - It calls `http://localhost:8000/health` with header `X-API-Key: client-a-key`.
+
+5. **Ping using the master API key**
+
+   If `MASTER_API_KEY` is set and `server.master_api_key` is configured:
+
+   ```bash
+   cargo run -p vym-fyi-client -- \
+     --config .docker/tenants.yaml \
+     --client client-a \
+     --use-master \
+     ping
+   ```
+
+   In this case, the CLI:
+   - Still reads the same config and client entry.
+   - Resolves both `api_key` and `master_api_key` env placeholders.
+   - Sends `X-API-Key: super-admin-key` instead of the client-specific key.
+
+As you add more CLI commands (e.g. to create/list links or tenants), they will follow the same pattern: you choose a `--client` and optionally `--use-master`, and the CLI picks the correct API key for you.
 
 ## Metrics and Observability
 

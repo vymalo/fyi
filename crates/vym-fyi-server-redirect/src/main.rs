@@ -1,77 +1,39 @@
 #[macro_use]
 extern crate rocket;
 
-use std::time::Duration;
-
-use crate::handlers::crl::{get_crl, get_revocations};
+use crate::app::{RedirectApp, RedirectAppBuilder};
 use crate::handlers::health::health;
-use crate::handlers::register_agent::register_agent;
-use crate::handlers::revoke::revoke;
 use crate::handlers::short_link::redirect_short_link;
-use crate::models::oidc_state::OidcState;
-
-mod handlers;
-mod models;
-mod shared;
-use crate::models::ca_config::CaProvider;
-use crate::shared::crl::CrlState;
-use crate::shared::ledger::Ledger;
-use crate::shared::opts::Opt;
-use clap::Parser;
 use mimalloc::MiMalloc;
 use rocket_prometheus::PrometheusMetrics;
 use tracing::info;
 use vym_fyi_model::models::errors::{AppError, AppResult};
-use vym_fyi_model::services::http_client::HttpClient;
 use vym_fyi_model::services::logging::setup_logging;
+
+mod app;
+mod handlers;
+mod models;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
 #[rocket::main]
 async fn main() -> AppResult<()> {
-    setup_logging("wazuh-cert-oauth2-server")?;
+    setup_logging("vym-fyi-server-redirect")?;
 
-    info!("starting up");
+    info!("starting redirect server");
 
-    let Opt {
-        oauth_issuer,
-        kc_audiences,
-        root_ca_path,
-        root_ca_key_path,
-        discovery_ttl_secs,
-        jwks_ttl_secs,
-        ca_cache_ttl_secs,
-        crl_dist_url,
-        crl_path,
-        ledger_path,
-    } = Opt::try_parse()?;
-    let kc_audiences = kc_audiences.map(|a| a.split(",").map(|s| s.to_string()).collect());
+    let app: RedirectApp = RedirectAppBuilder::from_env()?
+        .max_connections(5)
+        .build()
+        .await?;
 
-    // Shared HTTP client service with connection pooling
-    let http_client = HttpClient::new_with_defaults()?;
     let prometheus = PrometheusMetrics::new();
 
     rocket::build()
         .attach(prometheus.clone())
-        .manage(http_client.clone())
-        .manage(OidcState::new(
-            oauth_issuer,
-            kc_audiences,
-            Duration::from_secs(discovery_ttl_secs),
-            Duration::from_secs(jwks_ttl_secs),
-            http_client,
-        ))
-        .manage(CaProvider::new(
-            root_ca_path,
-            root_ca_key_path,
-            Duration::from_secs(ca_cache_ttl_secs),
-            crl_dist_url,
-        ))
-        .manage(Ledger::new(ledger_path.into()).await?)
-        .manage(CrlState::new(crl_path.into()).await?)
-        .mount("/", routes![health, get_crl, redirect_short_link])
-        .mount("/api", routes![register_agent, revoke, get_revocations])
+        .manage(app)
+        .mount("/", routes![health, redirect_short_link])
         .mount("/metrics", prometheus)
         .launch()
         .await

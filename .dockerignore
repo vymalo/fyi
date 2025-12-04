@@ -15,6 +15,7 @@
 !crates/vym-fyi-client/src
 !crates/vym-fyi-client/Cargo.toml
 
+!crates/vym-fyi-server-crud/migrations
 !crates/vym-fyi-server-crud/src
 !crates/vym-fyi-server-crud/Cargo.toml
 !crates/vym-fyi-server-crud/Rocket.toml

@@ -10,17 +10,11 @@ authors.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 rocket.workspace = true
-jsonwebtoken.workspace = true
-openssl.workspace = true
-rand.workspace = true
 serde.workspace = true
 mimalloc.workspace = true
-clap.workspace = true
-openssl-sys.workspace = true
-foreign-types.workspace = true
-url.workspace = true
 rocket_prometheus.workspace = true
+sqlx.workspace = true
 
 [dependencies.vym-fyi-model]
-features = ["rocket", "openssl"]
+features = ["rocket"]
 workspace = true

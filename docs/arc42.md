@@ -96,7 +96,7 @@ graph LR
 
 - Inbound traffic:
   - `/api/*` → CRUD server.
-  - `/r/*` or `/{tenant}/{slug}` → Redirect server (exact routing is configurable).
+  - `/r/*` or `/<slug>` → Redirect server (exact routing is configurable).
   - `/metrics` on each server → for Prometheus, not exposed publicly.
 - Outbound traffic:
   - Both servers connect to Postgres using separate DB users.
@@ -145,7 +145,7 @@ From `Cargo.toml`:
 
 - **vym-fyi-server-redirect**
   - Rocket HTTP server for redirect endpoints.
-  - Parses incoming requests into `{tenant_id, slug}` (based on host or path).
+  - Parses incoming requests into `{slug}` (optionally combined with host for multi‑tenant setups).
   - Uses a read‑only Postgres connection to resolve `slug` → `target_url`.
   - Emits redirect metrics and traces; exposes `/metrics`.
 
@@ -180,11 +180,11 @@ From `Cargo.toml`:
 
 ### 6.1 Redirect Flow
 
-1. User requests a short URL (e.g. `https://short.example.com/t1/abc123`).
+1. User requests a short URL (e.g. `https://short.example.com/abc123`).
 2. Ingress forwards the request to the Redirect server.
 3. Redirect server:
-   - Parses `tenant_id` (`t1`) and `slug` (`abc123`) from the request.
-   - Queries Postgres using the read‑only pool for an active short link.
+   - Parses `slug` (`abc123`) from the request.
+   - Queries Postgres using the read‑only pool for an active short link (and, if applicable, host‑scoped tenant).
    - Emits metrics (success/failure counters, latency) and tracing spans.
    - Returns an HTTP redirect (e.g. `302`) to the target URL.
 
@@ -265,7 +265,7 @@ From `Cargo.toml`:
 - Tenants represent isolated clients using the system.
 - Every short link belongs to exactly one tenant.
 - CRUD server derives `tenant_id` from the API key.
-- Redirect server derives `tenant_id` from the request (host/path convention) and only reads rows with that `tenant_id`.
+- Redirect server does not receive explicit tenant information in the path; it looks up the slug (and optionally the host) and reads the corresponding row, which includes `tenant_id`.
 
 ### 8.3 Configuration and `config.yaml`
 
@@ -274,6 +274,7 @@ The CLI is configured via a YAML file with multiple clients. Example:
 ```yaml
 server:
   base_url: https://crud.example.com
+  master_api_key: "$(MASTER_API_KEY)"  # optional
 
 clients:
   client-a:
@@ -283,8 +284,8 @@ clients:
 
   client-b:
     name: my-cli-client-b
-    api_key: "$(CLIENT_B_SECRET)"
-    role: url
+  api_key: "$(CLIENT_B_SECRET)"
+  role: url
 ```
 
 - `server.base_url`: URL of the CRUD server.
@@ -293,6 +294,9 @@ clients:
   - May contain placeholders like `$(CLIENT_A_SECRET)`.
   - At runtime, the CLI replaces each `$(NAME)` with the value of environment variable `NAME`.
   - This allows storing API keys in environment variables instead of on disk.
+- `server.master_api_key`:
+  - Optional master key for administrative operations (such as managing tenants or keys from the CLI).
+  - Also supports `$(ENV_VAR_NAME)` placeholders and is resolved in the same way.
 
 Server configuration is driven by environment variables, which are defined in deployment manifests and Helm values (e.g. DB URLs, OTLP endpoint, log level).
 

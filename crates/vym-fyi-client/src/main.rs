@@ -34,20 +34,29 @@ async fn app() -> AppResult<()> {
     let resolved = resolve_client(&config, &opt.client)?;
 
     match opt.command {
-        Command::Ping => ping(&resolved).await,
+        Command::Ping => ping(&resolved, opt.use_master).await,
     }
 }
 
-async fn ping(client: &ResolvedClient) -> AppResult<()> {
+async fn ping(client: &ResolvedClient, use_master: bool) -> AppResult<()> {
     let http = HttpClient::new_with_defaults()?;
     let url = format!("{}/health", client.base_url.trim_end_matches('/'));
 
     info!("Pinging CRUD server at {}", url);
 
+    let api_key = if use_master {
+        client
+            .master_api_key
+            .as_deref()
+            .unwrap_or(&client.entry.api_key)
+    } else {
+        &client.entry.api_key
+    };
+
     let response = http
         .client()
         .get(&url)
-        .header("X-API-Key", &client.entry.api_key)
+        .header("X-API-Key", api_key)
         .send()
         .await?;
     info!("Received status: {}", response.status());

@@ -68,6 +68,9 @@ pub struct ClientConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerSection {
     pub base_url: String,
+    /// Optional master API key for administrative operations.
+    /// Can contain env placeholders like "$(MASTER_API_KEY)".
+    pub master_api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

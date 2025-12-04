@@ -1,13 +1,34 @@
+use rocket::State;
 use rocket::response::Redirect;
-use tracing::info;
+use tracing::{error, info};
+
+use vym_fyi_model::services::repos::ShortLinkRepository;
+
+use crate::RedirectApp;
 
 /// Redirect endpoint skeleton.
 ///
-/// For now this only logs the request and returns 404 (no redirect).
-/// A later iteration will look up the slug in Postgres using the
-/// tenant id and issue an HTTP redirect.
-#[get("/<tenant>/<slug>")]
-pub async fn redirect_short_link(tenant: String, slug: String) -> Option<Redirect> {
-    info!("Redirect requested: tenant={} slug={}", tenant, slug);
-    None
+/// For now this uses a simple table `short_links` with `slug` as the
+/// primary key. Slugs are assumed to be globally unique.
+#[get("/<slug>")]
+pub async fn redirect_short_link(slug: String, app: &State<RedirectApp>) -> Option<Redirect> {
+    info!("Redirect requested: slug={}", slug);
+
+    let repo: ShortLinkRepository = app.short_link_repository();
+    let result = repo.resolve(&slug).await;
+
+    match result {
+        Ok(Some(target)) => {
+            info!("Redirecting slug={} to {}", slug, target);
+            Some(Redirect::temporary(target))
+        }
+        Ok(None) => {
+            info!("No active short link found for slug={}", slug);
+            None
+        }
+        Err(e) => {
+            error!("Database error while resolving slug {}: {}", slug, e);
+            None
+        }
+    }
 }

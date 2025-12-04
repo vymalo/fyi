@@ -20,6 +20,9 @@ oauth2.workspace = true
 clap.workspace = true
 url.workspace = true
 rand_core.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+chrono.workspace = true
 
 [dependencies.tracing-subscriber]
 workspace = true

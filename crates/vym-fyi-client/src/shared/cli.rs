@@ -13,8 +13,13 @@ pub struct Opt {
     pub config: PathBuf,
 
     /// Client id to use from the `clients` map (can also be set via VYM_FYI_CLIENT).
+    /// If omitted and --use-master is set, only the master_api_key is used.
     #[arg(long, short, env = "VYM_FYI_CLIENT")]
     pub client: String,
+
+    /// Use the master API key instead of the client's API key when available.
+    #[arg(long)]
+    pub use_master: bool,
 
     #[command(subcommand)]
     pub command: Command,

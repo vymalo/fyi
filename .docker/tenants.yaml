@@ -1,0 +1,23 @@
+server:
+  # Base URL of the CRUD server as seen from the CLI or other clients.
+  base_url: http://localhost:8000
+
+  # Optional master API key used for administrative operations from the CLI.
+  # Use an environment placeholder and export the value in your shell:
+  #   export MASTER_API_KEY="super-admin-key"
+  master_api_key: "$(MASTER_API_KEY)"
+
+clients:
+  client-a:
+    name: client-a
+    # Client-specific API key (e.g. for tenant "client-a").
+    #   export CLIENT_A_SECRET="client-a-key"
+    api_key: "$(CLIENT_A_SECRET)"
+    role: admin
+
+  client-b:
+    name: client-b
+    # Client-specific API key (e.g. for tenant "client-b").
+    #   export CLIENT_B_SECRET="client-b-key"
+    api_key: "$(CLIENT_B_SECRET)"
+    role: url

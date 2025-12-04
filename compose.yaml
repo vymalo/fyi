@@ -1,4 +1,15 @@
 services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: vymalo
+      POSTGRES_PASSWORD: vymalo
+      POSTGRES_DB: vymalo
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
   crud:
     build:
       context: .
@@ -9,15 +20,16 @@ services:
     environment:
       RUST_LOG: "info"
       ROCKET_ADDRESS: "0.0.0.0"
-
-      OAUTH_ISSUER: "http://host.docker.internal:9100/realms/dev"
-
-      ROOT_CA_PATH: "/data/root-ca.pem"
-      ROOT_CA_KEY_PATH: "/data/root-ca-key.pem"
-      LEDGER_PATH: "/data/ledger.csv"
-
-      CRL_PATH: "/data/issuing.crl"
-      CRL_DIST_URL: "http://localhost:8000/crl/issuing.crl"
+      ROCKET_PORT: "8000"
+      # Read/write connection for CRUD API (tenant and link management).
+      DATABASE_URL: "postgres://vymalo:vymalo@db:5432/vymalo"
+      # Optional: path to tenants config inside the container (used for tenant sync).
+      TENANTS_CONFIG_PATH: "/config/tenants.yaml"
+    depends_on:
+      - db
+    volumes:
+      # Mount a local tenants.yaml (same structure as CLI config.yaml) into the container.
+      - ./.docker/tenants.yaml:/config/tenants.yaml:ro
     healthcheck:
       test: ["CMD", "/app/healthcheck"]
       interval: 30s
@@ -35,12 +47,11 @@ services:
     environment:
       RUST_LOG: "info"
       ROCKET_ADDRESS: "0.0.0.0"
-
-      OAUTH_ISSUER: "http://host.docker.internal:9100/realms/dev"
-      OAUTH_CLIENT_ID: "test-client-secret"
-      OAUTH_CLIENT_SECRET: "some-secret"
-
-      SERVER_BASE_URL: "http://localhost:8000"
+      ROCKET_PORT: "8000"
+      # Read-only connection for redirect server (future use).
+      DATABASE_URL_RO: "postgres://vymalo:vymalo@db:5432/vymalo"
+    depends_on:
+      - db
     healthcheck:
       test: ["CMD", "/app/healthcheck"]
       interval: 30s
@@ -48,3 +59,5 @@ services:
       start_period: 10s
       retries: 3
 
+volumes:
+  db_data: {}

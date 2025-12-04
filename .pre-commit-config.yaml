@@ -20,7 +20,7 @@ repos:
       - id: cargo-fmt
         name: cargo fmt
         description: Check formatting with rustfmt.
-        entry: cargo fmt --all -- --check
+        entry: cargo fmt --all
         language: rust
         types: [ rust ]
         pass_filenames: false

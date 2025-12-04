@@ -30,6 +30,7 @@ RUN \
   --mount=type=bind,source=./Cargo.toml,target=/app/Cargo.toml \
   --mount=type=bind,source=./Cargo.lock,target=/app/Cargo.lock \
   --mount=type=bind,source=./crates/vym-fyi-server-crud/Cargo.toml,target=/app/crates/vym-fyi-server-crud/Cargo.toml \
+  --mount=type=bind,source=./crates/vym-fyi-server-crud/migrations,target=/app/crates/vym-fyi-server-crud/migrations \
   --mount=type=bind,source=./crates/vym-fyi-server-crud/src,target=/app/crates/vym-fyi-server-crud/src \
   --mount=type=bind,source=./crates/vym-fyi-model/Cargo.toml,target=/app/crates/vym-fyi-model/Cargo.toml \
   --mount=type=bind,source=./crates/vym-fyi-model/src,target=/app/crates/vym-fyi-model/src \
@@ -62,7 +63,6 @@ RUN \
     -p vym-fyi-server-crud \
     -p vym-fyi-server-redirect \
     -p vym-fyi-healthcheck \
-    --features openssl/vendored \
   && cp ./target/"${RUST_TARGET}"/prod/vym-fyi-server-crud vym-fyi-crud \
   && cp ./target/"${RUST_TARGET}"/prod/vym-fyi-server-redirect vym-fyi-redirect \
   && cp ./target/"${RUST_TARGET}"/prod/vym-fyi-healthcheck healthcheck

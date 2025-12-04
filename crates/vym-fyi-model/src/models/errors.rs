@@ -94,10 +94,11 @@ pub enum AppError {
     #[error("YAML parse error: {0}")]
     YamlError(#[from] serde_yaml::Error),
 
-    //#[error("Random generation error: {0}")]
-    //RandOsError(#[from] rand_core::Error),
-    #[error("Rand OS generation error: {0}")]
-    RandOsError(#[from] rand_core::OsError),
+    #[error("Database error: {0}")]
+    Sqlx(#[from] sqlx::Error),
+
+    #[error("Database migration error: {0}")]
+    SqlxMigrate(#[from] sqlx::migrate::MigrateError),
 
     #[cfg(feature = "rocket")]
     #[error("SetGlobalDefaultError error: {source}")]

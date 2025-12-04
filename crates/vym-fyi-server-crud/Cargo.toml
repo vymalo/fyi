@@ -11,13 +11,10 @@ tokio.workspace = true
 tracing.workspace = true
 rocket.workspace = true
 serde.workspace = true
-serde_json.workspace = true
-clap.workspace = true
-oauth2.workspace = true
 mimalloc.workspace = true
-rand.workspace = true
-base64.workspace = true
 rocket_prometheus.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
 
 [dependencies.vym-fyi-model]
 workspace = true
