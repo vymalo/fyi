@@ -67,13 +67,18 @@ impl ShortLinkRepository {
         Self { pool }
     }
 
-    /// Upsert a short link by slug and target_url.
+    /// Upsert a short link by slug, target_url, and tenant_id.
     /// Returns (slug, target_url, is_active).
-    pub async fn upsert(&self, slug: &str, target_url: &str) -> AppResult<(String, String, bool)> {
+    pub async fn upsert(
+        &self,
+        slug: &str,
+        target_url: &str,
+        tenant_id: Uuid,
+    ) -> AppResult<(String, String, bool)> {
         let row = sqlx::query(
             r#"
-            INSERT INTO short_links (slug, target_url, is_active)
-            VALUES ($1, $2, TRUE)
+            INSERT INTO short_links (slug, target_url, is_active, tenant_id)
+            VALUES ($1, $2, TRUE, $3)
             ON CONFLICT (slug) DO UPDATE
                 SET target_url = EXCLUDED.target_url,
                     is_active = TRUE
@@ -82,6 +87,7 @@ impl ShortLinkRepository {
         )
         .bind(slug)
         .bind(target_url)
+        .bind(tenant_id)
         .fetch_one(&self.pool)
         .await?;
 
@@ -92,15 +98,57 @@ impl ShortLinkRepository {
         ))
     }
 
-    /// List all short links as (slug, target_url, is_active).
-    pub async fn list_all(&self) -> AppResult<Vec<(String, String, bool)>> {
+    /// List short links for a single tenant as (slug, target_url, is_active)
+    /// with pagination support.
+    pub async fn list_by_tenant(
+        &self,
+        tenant_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<Vec<(String, String, bool)>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT slug, target_url, is_active
+            FROM short_links
+            WHERE tenant_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    row.get("slug"),
+                    row.get("target_url"),
+                    row.get::<bool, _>("is_active"),
+                )
+            })
+            .collect())
+    }
+
+    /// List all short links (any tenant) with pagination.
+    pub async fn list_paginated(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<Vec<(String, String, bool)>> {
         let rows = sqlx::query(
             r#"
             SELECT slug, target_url, is_active
             FROM short_links
             ORDER BY created_at DESC
+            LIMIT $1 OFFSET $2
             "#,
         )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -140,20 +188,22 @@ impl ShortLinkRepository {
         &self,
         target_url: &str,
         min_len: usize,
+        tenant_id: Uuid,
     ) -> AppResult<(String, String, bool)> {
         const MAX_ATTEMPTS: usize = 5;
         for _ in 0..MAX_ATTEMPTS {
             let slug = crate::services::slug::generate_slug(min_len);
             let row = sqlx::query(
                 r#"
-                INSERT INTO short_links (slug, target_url, is_active)
-                VALUES ($1, $2, TRUE)
+                INSERT INTO short_links (slug, target_url, is_active, tenant_id)
+                VALUES ($1, $2, TRUE, $3)
                 ON CONFLICT (slug) DO NOTHING
                 RETURNING slug, target_url, is_active
                 "#,
             )
             .bind(&slug)
             .bind(target_url)
+            .bind(tenant_id)
             .fetch_optional(&self.pool)
             .await?;
 

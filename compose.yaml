@@ -25,6 +25,10 @@ services:
       DATABASE_URL: "postgres://vymalo:vymalo@db:5432/vymalo"
       # Optional: path to tenants config inside the container (used for tenant sync).
       TENANTS_CONFIG_PATH: "/config/tenants.yaml"
+      #
+      MASTER_API_KEY: miaou
+      CLIENT_A_SECRET: miaou
+      CLIENT_B_SECRET: miaou
     depends_on:
       - db
     volumes:
@@ -48,7 +52,6 @@ services:
       RUST_LOG: "info"
       ROCKET_ADDRESS: "0.0.0.0"
       ROCKET_PORT: "8000"
-      # Read-only connection for redirect server (future use).
       DATABASE_URL_RO: "postgres://vymalo:vymalo@db:5432/vymalo"
     depends_on:
       - db

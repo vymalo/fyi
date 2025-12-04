@@ -3755,6 +3755,7 @@ dependencies = [
 name = "vym-fyi-server-crud"
 version = "1.0.0"
 dependencies = [
+ "chrono",
  "mimalloc",
  "rocket",
  "rocket_prometheus",

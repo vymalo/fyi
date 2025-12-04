@@ -42,6 +42,42 @@ pub enum Command {
         target: String,
     },
 
-    /// List all short links visible to this client.
-    LinksList,
+    /// List short links visible to this client (with optional filters).
+    LinksList {
+        /// Page number (1-based).
+        #[arg(long)]
+        page: Option<u32>,
+
+        /// Items per page (default 20, max 100).
+        #[arg(long = "per-page")]
+        per_page: Option<u32>,
+
+        /// Filter by exact slug.
+        #[arg(long)]
+        slug: Option<String>,
+
+        /// Filter by target URL containing this substring (case-insensitive).
+        #[arg(long = "target-contains")]
+        target_contains: Option<String>,
+
+        /// Filter by active status.
+        #[arg(long)]
+        active: Option<bool>,
+
+        /// Only include links created before this timestamp (RFC3339, e.g. 2025-01-01T00:00:00Z).
+        #[arg(long = "created-before")]
+        created_before: Option<String>,
+
+        /// Only include links created after this timestamp (RFC3339).
+        #[arg(long = "created-after")]
+        created_after: Option<String>,
+
+        /// Only include links expiring before this timestamp (RFC3339).
+        #[arg(long = "expires-before")]
+        expires_before: Option<String>,
+
+        /// Only include links expiring after this timestamp (RFC3339).
+        #[arg(long = "expires-after")]
+        expires_after: Option<String>,
+    },
 }

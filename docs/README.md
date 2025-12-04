@@ -160,7 +160,9 @@ If you add a new client entry to `.docker/tenants.yaml` and restart the CRUD con
    - The CLI loads `.docker/tenants.yaml`.
    - It selects `clients.client-a`.
    - It replaces `$(CLIENT_A_SECRET)` with the value of the `CLIENT_A_SECRET` environment variable.
-   - It calls `http://localhost:8000/health` with header `X-API-Key: client-a-key`.
+   - It calls `http://localhost:8000/health` with headers:
+     - `X-API-Key: client-a-key`
+     - `X-Client-Id: client-a`
 
 5. **Ping using the master API key**
 
@@ -178,6 +180,7 @@ If you add a new client entry to `.docker/tenants.yaml` and restart the CRUD con
    - Still reads the same config and client entry.
    - Resolves both `api_key` and `master_api_key` env placeholders.
    - Sends `X-API-Key: super-admin-key` instead of the client-specific key.
+   - Still sets `X-Client-Id: client-a`, but the server accepts the master key for any client id.
 
 6. **Create a short link from the CLI**
 
@@ -227,6 +230,34 @@ If you add a new client entry to `.docker/tenants.yaml` and restart the CRUD con
    The CLI:
    - Calls `GET http://localhost:8000/api/links`.
    - Prints the JSON response to your terminal (an array of objects with `slug`, `target_url`, and `active`).
+
+   You can also narrow down the results using filters and pagination:
+
+   ```bash
+   cargo run -p vym-fyi-client -- \
+     --config .docker/tenants.yaml \
+     --client client-a \
+     links-list \
+       --page 1 \
+       --per-page 50 \
+       --slug promo-2025 \
+       --target-contains landing \
+       --active true \
+       --created-after 2025-01-01T00:00:00Z \
+       --created-before 2025-12-31T23:59:59Z
+   ```
+
+   These flags map directly to HTTP query parameters on `/api/links`:
+
+   - `--page` → `page` (1-based, default 1).
+   - `--per-page` → `per_page` (default 20, max 100).
+   - `--slug` → `slug` (exact slug match).
+   - `--target-contains` → `target_contains` (case-insensitive substring match in `target_url`).
+   - `--active` → `active` (`true` / `false`).
+   - `--created-after` / `--created-before` → `created_after` / `created_before`
+     (RFC3339 timestamps on `created_at`, for example `2025-01-01T00:00:00Z`).
+   - `--expires-after` / `--expires-before` → `expires_after` / `expires_before`
+     (RFC3339 timestamps on `expires_at`).
 
 All CLI commands follow the same basic pattern:
 - You point to a config file with `--config`.

@@ -15,6 +15,7 @@ mimalloc.workspace = true
 rocket_prometheus.workspace = true
 sqlx.workspace = true
 uuid.workspace = true
+chrono.workspace = true
 
 [dependencies.vym-fyi-model]
 workspace = true

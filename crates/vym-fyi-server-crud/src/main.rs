@@ -11,6 +11,7 @@ use vym_fyi_model::models::errors::{AppError, AppResult};
 use vym_fyi_model::services::logging::setup_logging;
 
 mod app;
+mod auth;
 mod handlers;
 mod models;
 
