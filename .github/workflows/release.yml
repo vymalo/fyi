@@ -8,9 +8,9 @@ on:
       - 'v*'
     paths:
       - '.github/workflows/release.yml'
-      - '../../crates/vym-fyi-client/**'
-      - '../../crates/vym-fyi-model/**'
-      - '../../crates/vym-fyi-model/**'
+      - 'crates/vym-fyi-client/**'
+      - 'crates/vym-fyi-model/**'
+      - 'crates/vym-fyi-model/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
 

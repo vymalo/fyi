@@ -8,9 +8,9 @@ on:
       - 'v*'
     paths:
       - '.github/workflows/build.yml'
-      - '../../crates/vym-fyi-server/**'
+      - 'crates/vym-fyi-server/**'
       - 'crates/wazuh-cert-oauth2-metrics/**'
-      - '../../crates/vym-fyi-model/**'
+      - 'crates/vym-fyi-model/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'Dockerfile'
