@@ -5,7 +5,6 @@ use vym_fyi_model::services::repos::{PgRepositoryFactory, RepositoryFactory, Sho
 /// Facade over redirect server components.
 #[derive(Clone)]
 pub struct RedirectApp {
-    _pool: Pool<Postgres>,
     repos: PgRepositoryFactory,
 }
 
@@ -38,9 +37,9 @@ impl RedirectAppBuilder {
             .connect(&self.database_url_ro)
             .await?;
 
-        let repos = PgRepositoryFactory::new(pool.clone());
+        let repos = PgRepositoryFactory::new(pool);
 
-        Ok(RedirectApp { _pool: pool, repos })
+        Ok(RedirectApp { repos })
     }
 }
 

@@ -26,7 +26,7 @@ services:
       # Optional: path to tenants config inside the container (used for tenant sync).
       TENANTS_CONFIG_PATH: "/config/tenants.yaml"
       #
-      MASTER_API_KEY: miaou
+      MASTER_API_KEY: miaou-waff
       CLIENT_A_SECRET: miaou
       CLIENT_B_SECRET: miaou
     depends_on:

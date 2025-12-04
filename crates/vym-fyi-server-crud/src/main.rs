@@ -9,7 +9,8 @@ use axum_prometheus::PrometheusMetricLayer;
 use mimalloc::MiMalloc;
 use tokio::net::TcpListener;
 use tracing::info;
-use vym_fyi_model::models::errors::{AppError, AppResult};
+use vym_fyi_model::models::errors::AppResult;
+use vym_fyi_model::services::config::bind_addr_from_env;
 use vym_fyi_model::services::logging::setup_logging;
 
 mod app;
@@ -45,7 +46,7 @@ async fn main() -> AppResult<()> {
         .with_state(app.clone())
         .layer(prometheus_layer);
 
-    let addr = bind_addr()?;
+    let addr = bind_addr_from_env(8000)?;
     let listener = TcpListener::bind(addr).await?;
     let local_addr = listener.local_addr().unwrap_or(addr);
 
@@ -54,16 +55,4 @@ async fn main() -> AppResult<()> {
     axum::serve(listener, router).await?;
 
     Ok(())
-}
-
-fn bind_addr() -> Result<std::net::SocketAddr, AppError> {
-    let host = std::env::var("ROCKET_ADDRESS").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port: u16 = std::env::var("ROCKET_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(8000);
-
-    let addr = format!("{}:{}", host, port);
-    addr.parse()
-        .map_err(|e| AppError::Config(format!("invalid bind address {}: {}", addr, e)))
 }

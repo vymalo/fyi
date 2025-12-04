@@ -134,7 +134,7 @@ pub async fn list_links(
 
     let query = qb.build();
 
-    let rows = query.fetch_all(&app._pool).await.map_err(|e| {
+    let rows = query.fetch_all(app.db_pool()).await.map_err(|e| {
         error!("Database error listing short links: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;

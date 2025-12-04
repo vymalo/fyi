@@ -1,4 +1,5 @@
 use std::fs;
+use std::net::SocketAddr;
 use std::path::Path;
 
 use crate::models::errors::{AppError, AppResult};
@@ -82,4 +83,16 @@ pub fn resolve_client(config: &ClientConfig, client_id: &str) -> AppResult<Resol
         entry: resolved_entry,
         master_api_key,
     })
+}
+
+pub fn bind_addr_from_env(default_port: u16) -> AppResult<SocketAddr> {
+    let host = std::env::var("ADDRESS").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(default_port);
+
+    let addr = format!("{}:{}", host, port);
+    addr.parse()
+        .map_err(|e| AppError::Config(format!("invalid bind address {}: {}", addr, e)))
 }

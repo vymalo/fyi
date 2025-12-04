@@ -5,7 +5,7 @@ use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 use tracing::{info, warn};
 use uuid::Uuid;
 use vym_fyi_model::models::errors::AppResult;
-use vym_fyi_model::models::url_shortener::{ClientConfig, Role};
+use vym_fyi_model::models::url_shortener::ClientConfig;
 use vym_fyi_model::services::config::{load_client_config, resolve_env_placeholders};
 use vym_fyi_model::services::repos::{
     PgRepositoryFactory, RepositoryFactory, ShortLinkRepository, TenantRepository,
@@ -17,16 +17,63 @@ pub struct ApiKeyBinding {
     pub key: String,
     pub client_id: Option<String>,
     pub tenant_id: Option<Uuid>,
-    pub role: Option<Role>,
     pub is_master: bool,
+}
+
+/// Delegates API key lookup and comparison (constant-time).
+#[derive(Clone)]
+pub struct ApiKeyStore {
+    bindings: Vec<ApiKeyBinding>,
+}
+
+impl ApiKeyStore {
+    pub fn new(bindings: Vec<ApiKeyBinding>) -> Self {
+        Self { bindings }
+    }
+
+    pub fn authenticate(&self, api_key: &str, client_id: Option<&str>) -> Option<ApiKeyBinding> {
+        fn constant_time_eq(a: &str, b: &str) -> bool {
+            let ab = a.as_bytes();
+            let bb = b.as_bytes();
+            let max = ab.len().max(bb.len());
+            let mut diff: u8 = (ab.len() ^ bb.len()) as u8;
+            for i in 0..max {
+                let av = *ab.get(i).unwrap_or(&0);
+                let bv = *bb.get(i).unwrap_or(&0);
+                diff |= av ^ bv;
+            }
+            diff == 0
+        }
+
+        // Master key takes precedence, global scope.
+        if let Some(binding) = self
+            .bindings
+            .iter()
+            .find(|b| b.is_master && constant_time_eq(&b.key, api_key))
+        {
+            return Some(binding.clone());
+        }
+
+        // Otherwise require a client id match.
+        client_id.and_then(|cid| {
+            self.bindings
+                .iter()
+                .find(|b| {
+                    !b.is_master
+                        && b.client_id.as_deref() == Some(cid)
+                        && constant_time_eq(&b.key, api_key)
+                })
+                .cloned()
+        })
+    }
 }
 
 /// Facade over core CRUD server components (DB pool, repositories).
 #[derive(Clone)]
 pub struct CrudApp {
-    pub _pool: Pool<Postgres>,
-    pub repos: PgRepositoryFactory,
-    pub api_keys: Vec<ApiKeyBinding>,
+    pool: Pool<Postgres>,
+    repos: PgRepositoryFactory,
+    pub api_keys: ApiKeyStore,
 }
 
 /// Builder for `CrudApp` (builder pattern).
@@ -92,7 +139,7 @@ impl CrudAppBuilder {
             let api_keys = build_api_key_bindings(&config, &tenant_map)?;
 
             Ok(CrudApp {
-                _pool: pool,
+                pool,
                 repos,
                 api_keys,
             })
@@ -101,31 +148,21 @@ impl CrudAppBuilder {
                 "TENANTS_CONFIG_PATH not set; skipping tenant synchronization and API key bindings"
             );
             Ok(CrudApp {
-                _pool: pool,
+                pool,
                 repos,
-                api_keys: Vec::new(),
+                api_keys: ApiKeyStore::new(Vec::new()),
             })
         }
     }
 }
 
 impl CrudApp {
-    #[allow(dead_code)]
-    pub fn tenant_repository(&self) -> TenantRepository {
-        self.repos.tenant_repo()
-    }
-
     pub fn short_link_repository(&self) -> ShortLinkRepository {
         self.repos.short_link_repo()
     }
 
-    /// Lookup the tenant_id for a given client id, if known.
-    #[allow(dead_code)]
-    pub fn tenant_id_for_client(&self, client_id: &str) -> Option<Uuid> {
-        self.api_keys
-            .iter()
-            .find(|b| b.client_id.as_deref() == Some(client_id) && b.tenant_id.is_some())
-            .and_then(|b| b.tenant_id)
+    pub fn db_pool(&self) -> &Pool<Postgres> {
+        &self.pool
     }
 }
 
@@ -157,7 +194,7 @@ async fn sync_tenants_with_repo(repo: &TenantRepository, config: &ClientConfig) 
 fn build_api_key_bindings(
     config: &ClientConfig,
     tenant_map: &std::collections::HashMap<String, Uuid>,
-) -> AppResult<Vec<ApiKeyBinding>> {
+) -> AppResult<ApiKeyStore> {
     let mut bindings = Vec::new();
 
     // Per-client API keys
@@ -168,7 +205,6 @@ fn build_api_key_bindings(
             key: resolved_key,
             client_id: Some(client_id.clone()),
             tenant_id,
-            role: entry.role.clone(),
             is_master: false,
         });
     }
@@ -180,10 +216,9 @@ fn build_api_key_bindings(
             key: resolved_master,
             client_id: None,
             tenant_id: None,
-            role: Some(Role::Admin),
             is_master: true,
         });
     }
 
-    Ok(bindings)
+    Ok(ApiKeyStore::new(bindings))
 }
