@@ -14,7 +14,7 @@ pub struct Opt {
 
     /// Client id to use from the `clients` map (can also be set via VYM_FYI_CLIENT).
     /// If omitted and --use-master is set, only the master_api_key is used.
-    #[arg(long, short, env = "VYM_FYI_CLIENT")]
+    #[arg(long, short = 'i', env = "VYM_FYI_CLIENT")]
     pub client: String,
 
     /// Use the master API key instead of the client's API key when available.
@@ -29,5 +29,19 @@ pub struct Opt {
 pub enum Command {
     /// Check connectivity to the CRUD server using the selected client.
     Ping,
-    // Future subcommands: links, tenants, api-keys, etc.
+
+    /// Create a new short link (slug -> target URL).
+    LinksCreate {
+        /// Optional slug part of the short URL (e.g. 'promo-2025').
+        /// If omitted, the server will generate a random slug.
+        #[arg(long)]
+        slug: Option<String>,
+
+        /// Target URL that the slug should redirect to.
+        #[arg(long)]
+        target: String,
+    },
+
+    /// List all short links visible to this client.
+    LinksList,
 }

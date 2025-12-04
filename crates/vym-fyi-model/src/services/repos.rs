@@ -133,6 +133,43 @@ impl ShortLinkRepository {
 
         Ok(row.map(|r| r.get("target_url")))
     }
+
+    /// Create a short link with a generated slug (at least `min_len` characters).
+    /// On rare collisions, this will retry a few times before failing.
+    pub async fn create_with_generated_slug(
+        &self,
+        target_url: &str,
+        min_len: usize,
+    ) -> AppResult<(String, String, bool)> {
+        const MAX_ATTEMPTS: usize = 5;
+        for _ in 0..MAX_ATTEMPTS {
+            let slug = crate::services::slug::generate_slug(min_len);
+            let row = sqlx::query(
+                r#"
+                INSERT INTO short_links (slug, target_url, is_active)
+                VALUES ($1, $2, TRUE)
+                ON CONFLICT (slug) DO NOTHING
+                RETURNING slug, target_url, is_active
+                "#,
+            )
+            .bind(&slug)
+            .bind(target_url)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            if let Some(row) = row {
+                return Ok((
+                    row.get("slug"),
+                    row.get("target_url"),
+                    row.get::<bool, _>("is_active"),
+                ));
+            }
+        }
+
+        Err(crate::models::errors::AppError::Config(
+            "Failed to generate unique slug after several attempts".into(),
+        ))
+    }
 }
 
 /// Abstract factory for repositories.

@@ -8,7 +8,8 @@ use crate::app::CrudApp;
 
 #[derive(Deserialize)]
 pub struct CreateLinkRequest {
-    pub slug: String,
+    /// Optional slug. If omitted or empty, the server will generate a random slug.
+    pub slug: Option<String>,
     pub target_url: String,
 }
 
@@ -26,13 +27,24 @@ pub async fn create_link(
     app: &State<CrudApp>,
 ) -> Result<(Status, Json<LinkResponse>), Status> {
     let req = payload.into_inner();
-    info!(
-        "Create link requested: slug={} target_url={}",
-        req.slug, req.target_url
-    );
-
     let repo = app.short_link_repository();
-    let result = repo.upsert(&req.slug, &req.target_url).await.map_err(|e| {
+    let result = match req.slug.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(slug) => {
+            info!(
+                "Create link requested with slug={} target_url={}",
+                slug, req.target_url
+            );
+            repo.upsert(slug, &req.target_url).await
+        }
+        None => {
+            info!(
+                "Create link requested without slug; generating slug for target_url={}",
+                req.target_url
+            );
+            repo.create_with_generated_slug(&req.target_url, 6).await
+        }
+    }
+    .map_err(|e| {
         error!("Database error inserting/updating short link: {}", e);
         Status::InternalServerError
     })?;

@@ -179,7 +179,59 @@ If you add a new client entry to `.docker/tenants.yaml` and restart the CRUD con
    - Resolves both `api_key` and `master_api_key` env placeholders.
    - Sends `X-API-Key: super-admin-key` instead of the client-specific key.
 
-As you add more CLI commands (e.g. to create/list links or tenants), they will follow the same pattern: you choose a `--client` and optionally `--use-master`, and the CLI picks the correct API key for you.
+6. **Create a short link from the CLI**
+
+   Use the `links-create` command to create or update a slug:
+
+   ```bash
+   cargo run -p vym-fyi-client -- \
+     --config .docker/tenants.yaml \
+     --client client-a \
+     links-create \
+       --slug promo-2025 \
+       --target https://example.com/landing
+   ```
+
+   What happens:
+   - The CLI picks the right API key as before.
+   - It sends a `POST` request to `http://localhost:8000/api/links` with JSON:
+     - `{ "slug": "promo-2025", "target_url": "https://example.com/landing" }`.
+   - The CRUD server stores or updates that short link in the database.
+
+   You can also omit the slug entirely and let the server generate it for you:
+
+   ```bash
+   cargo run -p vym-fyi-client -- \
+     --config .docker/tenants.yaml \
+     --client client-a \
+     links-create \
+       --target https://example.com/landing
+   ```
+
+   In this case:
+   - The CLI only sends `{ "target_url": "https://example.com/landing" }`.
+   - The CRUD server generates a random, URL-safe slug with at least 6 characters.
+   - The response body includes the generated `slug` so you can copy/paste it for use in URLs.
+
+7. **List short links from the CLI**
+
+   Use the `links-list` command to see all known links:
+
+   ```bash
+   cargo run -p vym-fyi-client -- \
+     --config .docker/tenants.yaml \
+     --client client-a \
+     links-list
+   ```
+
+   The CLI:
+   - Calls `GET http://localhost:8000/api/links`.
+   - Prints the JSON response to your terminal (an array of objects with `slug`, `target_url`, and `active`).
+
+All CLI commands follow the same basic pattern:
+- You point to a config file with `--config`.
+- You choose which client (tenant) to act as with `--client`.
+- Optionally you add `--use-master` to use the master API key instead of the client-specific key.
 
 ## Metrics and Observability
 
