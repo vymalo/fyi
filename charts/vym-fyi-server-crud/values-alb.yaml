@@ -1,5 +1,5 @@
 global:
-  domain: cert.example-wazuh.adorsys.com
+  domain: crud.example.com
   certArn: arn::other::stuffs
 
 cert:

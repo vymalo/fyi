@@ -8,9 +8,7 @@ on:
       - 'v*'
     paths:
       - '.github/workflows/release.yml'
-      - 'crates/vym-fyi-client/**'
-      - 'crates/vym-fyi-model/**'
-      - 'crates/vym-fyi-model/**'
+      - 'crates/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
 
@@ -46,18 +44,18 @@ jobs:
         with:
           command: "build"
           target: ${{ matrix.target }}
-          args: "-p wazuh-cert-oauth2-client --profile prod"
+          args: "-p vym-fyi-client --profile prod"
 
       - name: Rename resource
         env:
           TARGET: ${{ matrix.target }}
-        run: mv "target/$TARGET/prod/wazuh-cert-oauth2-client" "wazuh-cert-oauth2-client-$TARGET"
+        run: mv "target/$TARGET/prod/vym-fyi-client" "vym-fyi-client-$TARGET"
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
-          name: wazuh-cert-oauth2-client-${{ matrix.target }}
-          path: wazuh-cert-oauth2-client-${{ matrix.target }}
+          name: vym-fyi-client-${{ matrix.target }}
+          path: vym-fyi-client-${{ matrix.target }}
 
   build-macos:
     name: Build CLI for macOS
@@ -93,7 +91,7 @@ jobs:
         with:
           command: "build"
           target: ${{ matrix.target }}
-          args: "-p wazuh-cert-oauth2-client --profile prod"
+          args: "-p vym-fyi-client --profile prod"
         env:
           PKG_CONFIG_PATH: ${{ matrix.brew_prefix }}/lib/pkgconfig
           OPENSSL_NO_VENDOR: "1"
@@ -101,52 +99,13 @@ jobs:
       - name: Rename resource
         env:
           TARGET: ${{ matrix.target }}
-        run: mv "target/$TARGET/prod/wazuh-cert-oauth2-client" "wazuh-cert-oauth2-client-$TARGET"
+        run: mv "target/$TARGET/prod/vym-fyi-client" "vym-fyi-client-$TARGET"
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
-          name: wazuh-cert-oauth2-client-${{ matrix.target }}
-          path: wazuh-cert-oauth2-client-${{ matrix.target }}
-
-  build-windows:
-    name: Build CLI for Windows
-    runs-on: windows-latest
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        target:
-          - x86_64-pc-windows-msvc
-          - aarch64-pc-windows-msvc
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
-        with:
-          fetch-depth: "0"
-          persist-credentials: 'false'
-
-      # Note: intentionally avoid caches in release build to prevent cache poisoning
-
-      - name: Build with cross
-        uses: houseabsolute/actions-rust-cross@6ad5303397f8fc3350d7c3c953356a66978c24ac
-        with:
-          command: "build"
-          target: ${{ matrix.target }}
-          args: "-p wazuh-cert-oauth2-client --profile prod"
-
-      - name: Rename resource
-        shell: pwsh
-        env:
-          TARGET: ${{ matrix.target }}
-        run: Move-Item -Path "target/$env:TARGET/prod/wazuh-cert-oauth2-client.exe" -Destination "wazuh-cert-oauth2-client-$env:TARGET.exe"
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
-        with:
-          name: wazuh-cert-oauth2-client-${{ matrix.target }}
-          path: wazuh-cert-oauth2-client-${{ matrix.target }}.exe
+          name: vym-fyi-client-${{ matrix.target }}
+          path: vym-fyi-client-${{ matrix.target }}
 
   release:
     name: Release
@@ -155,7 +114,6 @@ jobs:
     needs:
       - build-linux
       - build-macos
-      - build-windows
     runs-on: ubuntu-latest
     steps:
       - name: Get the version

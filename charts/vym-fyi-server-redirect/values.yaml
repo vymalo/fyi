@@ -29,7 +29,7 @@ webhook:
       containers:
         app:
           image:
-            repository: ghcr.io/adorsys-gis/vym-fyi-server-redirect
+            repository: ghcr.io/vymalo/fyi-redirect
             tag: '{{ .Values.global.version }}'
             pullPolicy: IfNotPresent
 
@@ -115,7 +115,7 @@ webhook:
       annotations: { }
       className: 'nginx'
       hosts:
-        - host: webhook.example-wazuh.adorsys.com
+        - host: redirect.example.com
           paths:
             - path: /
               pathType: Prefix
@@ -123,6 +123,6 @@ webhook:
                 identifier: app
                 port: http
       tls:
-        - secretName: webhook-example-wazuh-adorsys-com-secret
+        - secretName: redirect-example-com
           hosts:
-            - webhook.example-wazuh.adorsys.com
+            - redirect.example.com

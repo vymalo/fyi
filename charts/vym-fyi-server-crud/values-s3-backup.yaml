@@ -5,12 +5,6 @@ cert:
         s3-init:
           enabled: true
           env:
-            AWS_DEFAULT_REGION: eu-central-1
-            # Optional: set a custom S3 endpoint for S3-compatible storage (e.g., MinIO)
-            # AWS_ENDPOINT_URL: "https://minio.local:9000"
-            # Choose either S3_URI or S3_BUCKET (+ optional S3_PREFIX)
-            # S3_URI: "s3://wazuh-cert-crl-backups/wazuh-cert-server/issuing.crl"
-            S3_BUCKET: wazuh-cert-crl-backups
             S3_PREFIX: wazuh-cert-server
             # Optional: override if different from default
             # CRL_PATH: "/usr/share/wazuh-cert-oauth2/data/issuing.crl"

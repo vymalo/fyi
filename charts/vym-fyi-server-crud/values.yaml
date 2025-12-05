@@ -1,5 +1,5 @@
 global:
-  domain: cert.example-wazuh.adorsys.com
+  domain: crud.example.com
   version: latest
 
 cert:
@@ -97,7 +97,7 @@ cert:
       containers:
         main:
           image:
-            repository: ghcr.io/adorsys-gis/wazuh-cert-oauth2
+            repository: ghcr.io/vymalo/fyi-crud
             tag: '{{ .Values.global.version }}'
             pullPolicy: IfNotPresent
 

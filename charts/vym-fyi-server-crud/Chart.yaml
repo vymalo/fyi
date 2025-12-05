@@ -1,5 +1,5 @@
 apiVersion: v2
-name: wazuh-cert-server
+name: vym-fyi-server-crud
 description: A Helm chart for Kubernetes
 
 # A chart can be either an 'application' or a 'library' chart.
@@ -23,10 +23,10 @@ version: 0.3.0
 # It is recommended to use it with quotes.
 appVersion: "0.3.0"
 
-home: https://github.com/ADORSYS-GIS/wazuh-cert-oauth2
+home: https://github.com/vymalo/vym-fyi-server-crud
 
 sources:
-  - https://github.com/ADORSYS-GIS/wazuh-cert-oauth2
+  - https://github.com/vymalo/fyi
 
 maintainers:
   - name: Stephane Segning Lambou

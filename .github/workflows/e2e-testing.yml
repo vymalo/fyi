@@ -25,8 +25,8 @@ jobs:
           toolchain: stable
           profile: minimal
 
-      - name: Build wazuh-cert-oauth2-client
-        run: cargo build --release --bin wazuh-cert-oauth2-client
+      - name: Build vym-fyi-client
+        run: cargo build --release --bin vym-fyi-client
 
       - name: Start backend services
         run: docker-compose -f compose.yaml up -d
