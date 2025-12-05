@@ -37,6 +37,8 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 tracing = { version = "0", features = ["attributes", "async-await", "std"] }
 
+tower-http = { version = "0.6", features = ["fs"] }
+
 mimalloc = "0"
 
 [profile.prod]

@@ -1,4 +1,6 @@
 *
+!static
+
 !Cargo.toml
 !Cargo.lock
 

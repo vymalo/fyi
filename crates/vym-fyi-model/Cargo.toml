@@ -7,6 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+tokio.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
 thiserror.workspace = true
@@ -21,3 +22,4 @@ tracing-subscriber.workspace = true
 axum.workspace = true
 axum-prometheus.workspace = true
 metrics.workspace = true
+tower-http.workspace = true

@@ -10,6 +10,7 @@ use vym_fyi_model::models::errors::AppResult;
 use vym_fyi_model::services::axum_metrics::{prometheus_layer_default, record_ip_metrics};
 use vym_fyi_model::services::config::bind_addr_from_env;
 use vym_fyi_model::services::logging::setup_logging;
+use vym_fyi_model::services::static_assets;
 
 mod app;
 mod handlers;
@@ -34,7 +35,9 @@ async fn main() -> AppResult<()> {
 
     let router = Router::new()
         .route("/health", get(health))
-        .route("/{slug}", get(redirect_short_link))
+        .route("/{slug}", get(redirect_short_link));
+
+    let router = static_assets::attach_static_routes(router)
         .route(
             "/metrics",
             get(move || async move { metrics_handle.render() }),

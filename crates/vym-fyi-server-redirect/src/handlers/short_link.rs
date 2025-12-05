@@ -1,11 +1,11 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
-    response::Redirect,
+    response::{IntoResponse, Redirect, Response},
 };
 use tracing::{error, info};
 
 use vym_fyi_model::services::repos::ShortLinkRepository;
+use vym_fyi_model::services::static_assets;
 
 use crate::RedirectApp;
 
@@ -16,7 +16,7 @@ use crate::RedirectApp;
 pub async fn redirect_short_link(
     Path(slug): Path<String>,
     State(app): State<RedirectApp>,
-) -> Result<Redirect, StatusCode> {
+) -> Response {
     info!("Redirect requested: slug={}", slug);
     let slug_counter = metrics::counter!("redirect_slug_requests_total", "slug" => slug.clone());
     slug_counter.increment(1);
@@ -27,15 +27,15 @@ pub async fn redirect_short_link(
     match result {
         Ok(Some(target)) => {
             info!("Redirecting slug={} to {}", slug, target);
-            Ok(Redirect::temporary(&target))
+            Redirect::temporary(&target).into_response()
         }
         Ok(None) => {
             info!("No active short link found for slug={}", slug);
-            Err(StatusCode::NOT_FOUND)
+            static_assets::not_found().await
         }
         Err(e) => {
             error!("Database error while resolving slug {}: {}", slug, e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            static_assets::internal_error().await
         }
     }
 }

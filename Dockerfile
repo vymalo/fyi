@@ -27,6 +27,7 @@ RUN \
 
 RUN \
   # Mount workspace files and only the necessary crates
+  --mount=type=bind,source=./static,target=/app/static \
   --mount=type=bind,source=./Cargo.toml,target=/app/Cargo.toml \
   --mount=type=bind,source=./Cargo.lock,target=/app/Cargo.lock \
   --mount=type=bind,source=./crates/vym-fyi-server-crud/Cargo.toml,target=/app/crates/vym-fyi-server-crud/Cargo.toml \
@@ -81,6 +82,7 @@ WORKDIR /app
 
 COPY --from=builder /app/vym-fyi-crud /app/vym-fyi-crud
 COPY --from=builder /app/healthcheck /app/healthcheck
+COPY static /app/static
 
 USER nonroot:nonroot
 
@@ -99,6 +101,7 @@ WORKDIR /app
 
 COPY --from=builder /app/vym-fyi-redirect /app/vym-fyi-redirect
 COPY --from=builder /app/healthcheck /app/healthcheck
+COPY static /app/static
 
 USER nonroot:nonroot
 
