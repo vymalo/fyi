@@ -11,6 +11,10 @@
 !crates/vym-fyi-model/src
 !crates/vym-fyi-model/Cargo.toml
 
+!crates/vym-fyi-node/src
+!crates/vym-fyi-node/build.rs
+!crates/vym-fyi-node/Cargo.toml
+
 !crates/vym-fyi-healthcheck/src
 !crates/vym-fyi-healthcheck/Cargo.toml
 

@@ -12,6 +12,23 @@ This repository contains a small, multi‑tenant URL shortener implemented as a 
 
 The services are intended to run in containers and on Kubernetes, using the existing `Dockerfile`, `compose.yaml`, and Helm charts under `charts/`.
 
+## Roadmap
+
+**0–3 months (Foundations)**
+- Harden auth and multi‑tenancy: stricter API key scoping, per‑tenant rate limits, and audit logs for CRUD changes.
+- Observability: expand Axum metrics (latency histograms, error counters, cache hit/miss), structured logs, and span propagation between CRUD/Redirect.
+- Reliability: connection pooling defaults, healthcheck coverage for dependencies, and CI that runs migrations plus smoke tests.
+
+**3–6 months (Scale & UX)**
+- Redirect path performance: DB read replicas, optional in‑memory cache for hot slugs, and graceful degradation when Postgres is unavailable.
+- CLI/DevEx: richer `vym-fyi-client` commands (bulk import/export, link analytics), autocompletion, and clearer error messages.
+- Tenant experience: soft‑delete links with TTL, per‑tenant quotas, and link labels/tags for organization.
+
+**6–12 months (Product polish)**
+- Analytics surface: aggregated usage dashboards per tenant (clicks, referrers, status trends), with privacy‑safe retention policies.
+- Delivery hardening: blue/green deploy flow in charts, rollout SLOs, and automated rollback triggers tied to metrics.
+- Ecosystem: SDK snippets for common languages and templated examples for self‑hosting with Terraform/Helm.
+
 ## Prerequisites
 
 - Rust (stable toolchain via `rustup`, edition 2024 in this workspace).

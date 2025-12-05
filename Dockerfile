@@ -35,6 +35,8 @@ RUN \
   --mount=type=bind,source=./crates/vym-fyi-server-crud/src,target=/app/crates/vym-fyi-server-crud/src \
   --mount=type=bind,source=./crates/vym-fyi-model/Cargo.toml,target=/app/crates/vym-fyi-model/Cargo.toml \
   --mount=type=bind,source=./crates/vym-fyi-model/src,target=/app/crates/vym-fyi-model/src \
+  --mount=type=bind,source=./crates/vym-fyi-node/Cargo.toml,target=/app/crates/vym-fyi-node/Cargo.toml \
+  --mount=type=bind,source=./crates/vym-fyi-node/src,target=/app/crates/vym-fyi-node/src \
   --mount=type=bind,source=./crates/vym-fyi-client/Cargo.toml,target=/app/crates/vym-fyi-client/Cargo.toml \
   --mount=type=bind,source=./crates/vym-fyi-client/src,target=/app/crates/vym-fyi-client/src \
   --mount=type=bind,source=./crates/vym-fyi-server-redirect/Cargo.toml,target=/app/crates/vym-fyi-server-redirect/Cargo.toml \

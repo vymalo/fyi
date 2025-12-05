@@ -4,7 +4,7 @@ use axum::{
     http::{StatusCode, request::Parts},
 };
 use std::future::ready;
-use tracing::info;
+use tracing::debug;
 
 /// Extracted information about the caller based on their API key.
 #[derive(Clone, Debug)]
@@ -25,7 +25,7 @@ impl FromRequestParts<CrudApp> for ApiKeyAuth {
             .get("X-Client-Id")
             .and_then(|h| h.to_str().ok())
             .map(str::to_owned);
-        info!("auth client_id={:?}", client_id);
+        debug!("auth client_id={:?}", client_id);
 
         let api_key = parts
             .headers

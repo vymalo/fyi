@@ -4,7 +4,8 @@ members = [
     "crates/vym-fyi-client",
     "crates/vym-fyi-model",
     "crates/vym-fyi-server-crud",
-    "crates/vym-fyi-healthcheck"
+    "crates/vym-fyi-healthcheck",
+    "crates/vym-fyi-node"
 ]
 resolver = "3"
 
@@ -22,14 +23,16 @@ tower = "0.5"
 hyper = { version = "1", features = ["full"] }
 metrics = "0.24"
 
+napi = { version = "2.16.17", default-features = false, features = ["napi6", "tokio_rt"] }
+napi-derive = "2.16.13"
+napi-build = "2.3.1"
+
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "gzip", "brotli", "deflate"] }
 log = { version = "0.4", features = ["std"] }
 env_logger = "0"
 rand = "0.9"
 rand_core = "0.9"
-oauth2 = { version = "5", features = ["reqwest"] }
 clap = { version = "4", features = ["derive", "env"] }
-url = "2"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "migrate", "uuid", "chrono"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }

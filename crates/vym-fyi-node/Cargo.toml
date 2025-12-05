@@ -1,0 +1,19 @@
+[package]
+name = "vym-fyi-node"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { workspace = true, default-features = false, features = ["napi6", "tokio_rt"] }
+napi-derive = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+vym-fyi-model = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }

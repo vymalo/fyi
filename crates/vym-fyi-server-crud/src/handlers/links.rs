@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::QueryBuilder;
 use sqlx::Row;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::app::CrudApp;
 use crate::auth::ApiKeyAuth;
@@ -72,7 +72,7 @@ pub async fn list_links(
     let limit = per_page as i64;
     let offset = ((page - 1) as i64) * (per_page as i64);
 
-    info!(
+    debug!(
         "List links requested (page={}, per_page={}, is_master={}, tenant_id={:?})",
         page, per_page, auth.is_master, auth.tenant_id
     );
