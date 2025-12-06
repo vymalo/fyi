@@ -294,6 +294,171 @@ In Kubernetes, a typical observability stack is:
 - Prometheus (scrapes `/metrics` and/or the collector’s Prometheus exporter).
 - Grafana (dashboards for CRUD/Redirect metrics and traces).
 
+### Recommended dashboard metrics
+
+Core metrics (both CRUD and Redirect):
+
+- Request volume and shape: RPS by service, HTTP method, and endpoint using `axum_http_requests_total`.
+- Latency percentiles per endpoint: p50/p95/p99 from `axum_http_requests_duration_seconds_*` and `http_request_duration_seconds_*`.
+- Error rate and error budget: error percentage from `http_request_errors_total` divided by total requests, broken down by status, class (`4xx`/`5xx`), and endpoint.
+- Saturation / load: in‑flight requests from `axum_http_requests_pending`, per service.
+- Payload characteristics: average and p95 response size per path using `http_response_size_bytes_*` to detect large or growing payloads.
+
+CRUD API–specific metrics (`job="crud"`):
+
+- Read vs write mix: RPS for `GET /api/links` vs `POST /api/links` to understand usage and capacity needs.
+- `/api/links` latency by operation: p95/p99 latency split by method (GET vs POST) from histograms and summaries.
+- Success vs client/auth errors: counts of `4xx` by status (e.g. validation vs auth errors) via `http_request_errors_total`.
+- Tenant or client usage: if a tenant label is added, RPS and error rate by tenant or API key.
+- Database health (via Postgres exporter): connection counts, query latency, slow queries, and cache hit ratio, correlated with `/api/links` latency.
+
+Redirector‑specific metrics (`job="redirect"`):
+
+- Redirect quality: ratio of valid redirects (3xx) vs invalid/expired slugs (4xx/5xx) for `endpoint="/{slug}"`.
+- Slug popularity: `redirect_slug_requests_total` to show top slugs by traffic and their trends over time.
+- Slug health: slugs or paths with the most errors, combining `redirect_slug_requests_total` and `http_request_errors_total`.
+- Abuse / brute‑force detection: IPs with high RPS and high 4xx/404 ratio using `http_requests_by_ip_total` and `http_request_errors_total`.
+- Cache / CDN effectiveness: cache hit ratio and status distribution from `http_cache_status_total`, split between static assets and redirect endpoints.
+- Bot vs browser traffic: approximate split by `user_agent` (e.g. `curl`/`bot` vs major browsers) using `http_requests_by_ip_total`.
+
+Cross‑cutting “experience” metrics:
+
+- User‑centred latency SLOs: e.g. “99.9% of redirect requests < 50ms and non‑5xx”, “99% of CRUD writes < 250ms and non‑5xx”.
+- Availability / uptime: `1 - (5xx requests / total requests)` per service, surfaced as gauges and alerts.
+- Rate limiting / throttling (if implemented): counters for requests rejected due to rate limits, per IP or API key.
+
+### Local Grafana dashboards (dashboards‑as‑code)
+
+This repo ships a small observability stack that you can run via Docker Compose:
+
+- `prometheus`: scrapes the CRUD and Redirect `/metrics` endpoints.
+- `grafana`: visualises metrics using provisioned dashboards.
+- `grafana-dashgen`: a one‑shot “init” container that generates Grafana dashboards from Python using [`grafanalib`](https://github.com/weaveworks/grafanalib).
+
+Dashboard sources live under:
+
+- `./.docker/grafana/dashboards/*.dashboard.py` – grafanalib definitions.
+- `./.docker/grafana/provisioning/datasources/prometheus.yml` – Prometheus datasource pointing at `http://prometheus:9090`.
+- `./.docker/grafana/provisioning/dashboards/axum.yml` – file‑based dashboard provisioning from `/tmp/grafana_dashboards` inside the Grafana container.
+
+The Compose services tie this together as follows:
+
+- `grafana-dashgen`:
+  - Image: `python:3.12-slim`.
+  - Mounts:
+    - `./.docker/grafana/dashboards` → `/dashboards_src` (Python sources).
+    - Named volume `grafana_dashboards` → `/out` (generated JSON).
+  - Command:
+    - Installs `grafanalib`.
+    - Runs `generate-dashboard` for each `*.dashboard.py`:
+      - `crud.dashboard.py` → `axum_crud_overview.json`
+      - `redirect.dashboard.py` → `axum_redirect_overview.json`
+      - `redirect_by_ip.dashboard.py` → `redirect_by_ip.json`
+      - `redirect_by_slug.dashboard.py` → `redirect_by_slug.json`
+      - `redirect_ip_slug.dashboard.py` → `redirect_ip_slug.json`
+    - All JSON files are written to `/out` (backed by the `grafana_dashboards` volume).
+
+- `grafana`:
+  - Image: `grafana/grafana`.
+  - Mounts:
+    - `grafana` → `/var/lib/grafana` (Grafana state).
+    - `grafana_dashboards` → `/tmp/grafana_dashboards` (generated dashboards).
+    - `./.docker/grafana/provisioning` → `/etc/grafana/provisioning` (datasource + dashboard providers).
+  - Depends on `grafana-dashgen` with `condition: service_completed_successfully` so dashboards are generated before Grafana starts.
+  - On startup, Grafana picks up:
+    - The Prometheus datasource.
+    - All JSON dashboards in `/tmp/grafana_dashboards`.
+
+#### Available dashboards and filters
+
+All dashboards are parameterised using Grafana template variables (defined via grafanalib `Templating`/`Template`):
+
+- **CRUD API Overview** (`axum_crud_overview.json`)
+  - Focus: `/api/links` behaviour and CRUD clients.
+  - Variables:
+    - `$status` – HTTP status codes from `axum_http_requests_total{job="crud"}`.
+    - `$client_ip` – client IPs from `http_requests_by_ip_total{job="crud"}`.
+  - Panels (all respect the variables where it makes sense):
+    - Request RPS by endpoint/method filtered by `$status`.
+    - `/api/links` latency p50/p95/p99 (histogram) filtered by `$status`.
+    - Average latency and response size by path (summaries) filtered by `$status`.
+    - Top CRUD clients (IP / user agent) filtered by `$client_ip` and `$status`.
+    - CRUD cache status by path filtered by `$status`.
+
+- **Redirector Overview** (`axum_redirect_overview.json`)
+  - Focus: overall redirect health and top paths/clients.
+  - Variables:
+    - `$status` – HTTP status codes from `axum_http_requests_total{job="redirect"}`.
+    - `$client_ip` – client IPs from `http_requests_by_ip_total{job="redirect"}`.
+    - `$slug` – paths (slug‑like) from `http_requests_by_ip_total{job="redirect"}`.
+  - Panels:
+    - Redirect RPS by endpoint/method/status filtered by `$status`.
+    - Redirect error rate (%) computed from `http_request_errors_total` and `axum_http_requests_total`, filtered by `$status`.
+    - Top slugs by traffic using `redirect_slug_requests_total`.
+    - Top error paths filtered by `$status` and `$slug`.
+    - Redirect cache status by path filtered by `$status` and `$slug`.
+    - Top redirect clients (IP / UA) filtered by `$client_ip`, `$status`, and `$slug`.
+
+- **Redirect – By Client IP** (`redirect_by_ip.json`)
+  - Focus: traffic and errors per client IP.
+  - Variable:
+    - `$client_ip` – IPs from `http_requests_by_ip_total{job="redirect"}` (with “All” option).
+  - Panels:
+    - Time series: redirect RPS by client IP filtered by `$client_ip`.
+    - Time series: error RPS by client IP (4xx/5xx) filtered by `$client_ip`.
+    - Tables: top IPs by traffic and by errors (top‑K snapshots).
+    - Table: status breakdown per IP (`client_ip,status`) filtered by `$client_ip`.
+
+- **Redirect – By Slug** (`redirect_by_slug.json`)
+  - Focus: slug popularity and health.
+  - Variable:
+    - `$slug` – slugs from `redirect_slug_requests_total{job="redirect"}` (with “All” option).
+  - Panels:
+    - Time series: RPS per slug filtered by `$slug`.
+    - Time series: p95 latency by status for `endpoint="/{slug}"`.
+    - Table: top slugs by traffic filtered by `$slug`.
+    - Table: top error paths (slug‑like paths) from `http_request_errors_total`.
+    - Table: cache status by slug path from `http_cache_status_total`.
+
+- **Redirect – IP × Slug** (`redirect_ip_slug.json`)
+  - Focus: correlation of client IPs and slugs/paths.
+  - Variables:
+    - `$client_ip` – IPs from `http_requests_by_ip_total{job="redirect"}`.
+    - `$slug` – paths from `http_requests_by_ip_total{job="redirect"}`.
+  - Panels (both snapshots):
+    - Top `(client_ip, path, status)` combinations by traffic filtered by `$client_ip` and `$slug`.
+    - Top `(client_ip, path, status)` combinations by error traffic (4xx/5xx) filtered by `$client_ip` and `$slug`.
+
+#### How to run and use Grafana locally
+
+1. From the repo root, start the full stack:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   This starts:
+   - Postgres (`db`)
+   - CRUD API (`crud`)
+   - Redirector (`redirect`)
+   - Prometheus (`prometheus`)
+   - Dashboard generator (`grafana-dashgen`)
+   - Grafana (`grafana`)
+
+2. Open Grafana at:
+
+   - `http://localhost:3000` (default login: `admin` / `admin`).
+
+3. Explore dashboards in the “Vymalo” folder:
+
+   - `CRUD API Overview`
+   - `Redirector Overview`
+   - `Redirect – By Client IP`
+   - `Redirect – By Slug`
+   - `Redirect – IP × Slug`
+
+4. Use the dashboard variables (`Status`, `Client IP`, `Slug/Path`) to slice metrics per status code, caller IP, or slug without editing any queries.
+
 ## Testing, linting, formatting
 
 - Format: `cargo fmt`

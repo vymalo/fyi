@@ -28,6 +28,8 @@ jobs:
         flavour:
           - Server
           - Redirect
+          - Server K8S
+          - Redirect K8S
         include:
           - flavour: Server
             suffix: "-crud"
@@ -35,6 +37,12 @@ jobs:
           - flavour: Redirect
             suffix: "-redirect"
             docker_target: "redirect"
+          - flavour: Server K8S
+            suffix: "-crud-k8s"
+            docker_target: "crud_k8s"
+          - flavour: Redirect K8S
+            suffix: "-redirect-k8s"
+            docker_target: "redirect_k8s"
     permissions:
       packages: write
       contents: read

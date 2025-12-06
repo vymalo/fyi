@@ -112,3 +112,36 @@ EXPOSE $PORT
 HEALTHCHECK --interval=10s --timeout=3s --start-period=2s --retries=5 CMD ["/app/healthcheck"]
 
 ENTRYPOINT ["/app/vym-fyi-redirect"]
+
+
+FROM baseprod as crud_k8s
+
+ENV RUST_LOG=warn
+ENV PORT=8000
+
+WORKDIR /app
+
+COPY --from=builder /app/vym-fyi-crud /app/vym-fyi-crud
+COPY static /app/static
+
+USER nonroot:nonroot
+
+EXPOSE $PORT
+
+ENTRYPOINT ["/app/vym-fyi-crud"]
+
+FROM baseprod as redirect_k8s
+
+ENV RUST_LOG=warn
+ENV PORT=8000
+
+WORKDIR /app
+
+COPY --from=builder /app/vym-fyi-redirect /app/vym-fyi-redirect
+COPY static /app/static
+
+USER nonroot:nonroot
+
+EXPOSE $PORT
+
+ENTRYPOINT ["/app/vym-fyi-redirect"]
