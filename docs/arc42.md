@@ -35,6 +35,7 @@ The services are packaged as containers and deployed on Kubernetes using the exi
 - **Security**: isolation between tenants, strict separation of read‑only and read/write DB roles.
 - **Observability**: metrics and traces available for all main flows, including per‑tenant usage where possible.
 - **Operability**: predictable Docker/K8s deployment, health checks, and metrics endpoints.
+- **Testability**: unit tests for helpers and strategies, integration tests for config/env resolution, CI running tests plus lint/format on every push.
 
 ### 1.3 Stakeholders
 
@@ -58,6 +59,7 @@ The services are packaged as containers and deployed on Kubernetes using the exi
 - **Deployment**:
   - Docker multi‑stage build via the root `Dockerfile` (targets `crud`, `redirect`, `healthcheck`).
   - Kubernetes deployment via Helm charts per server.
+ - **Design patterns**: shared factory + facade for DB access, strategies for link creation, adapters for HTTP query parameters, and a singleton HTTP client to keep HTTP consumers DRY.
 
 ---
 
@@ -126,6 +128,12 @@ graph LR
 - **Metrics & observability**:
   - All main flows are instrumented via OpenTelemetry and exported via OTLP.
   - `/metrics` exposes Prometheus‑compatible metrics on each server.
+- **Code structure and patterns**:
+  - Facades (`CrudApp`, `RedirectApp`) expose a narrow interface to the rest of each app.
+  - Factories (`RepositoryFactory` + `PgRepositoryFactory`) hand out DB repositories.
+  - Strategies (`ProvidedSlugStrategy`, `GeneratedSlugStrategy`) pick the link-creation flow.
+  - Adapters (`LinkListQueryAdapter` + `QueryParamsBuilder`) translate list inputs into HTTP query params.
+  - Singleton (`HttpClient::global`) supplies a shared HTTP client for callers.
 
 ---
 
@@ -160,16 +168,19 @@ From `Cargo.toml`:
   - Enforces role‑based permissions (e.g. `admin` vs `url` role).
   - Uses a read/write Postgres connection.
   - Emits HTTP and DB metrics and traces; exposes `/metrics`.
+  - Patterns: Facade (`CrudApp`), Factory (`RepositoryFactory` + `PgRepositoryFactory`), Strategy (`ProvidedSlugStrategy` vs `GeneratedSlugStrategy`), Adapter (shared `LinkListQueryAdapter` for list queries).
 
 - **vym-fyi-client**
   - CLI binary using `clap`.
   - Reads `config.yaml`, resolves any `$(ENV_VAR)` placeholders in `api_key`.
   - Provides commands to call CRUD endpoints (e.g. create/list links or tenants).
+  - Uses the shared query adapter to keep HTTP query construction DRY.
 
 - **vym-fyi-model**
   - Shared domain structs (tenants, API keys, short links, errors).
   - Shared telemetry utilities (e.g. `otel.rs` to set up traces and metrics).
   - Shared HTTP client helpers and logging where appropriate.
+  - Patterns: Repository factory abstraction and Postgres implementation, query adapter utilities, and a singleton HTTP client for reuse across crates.
 
 - **vym-fyi-healthcheck**
   - Simple binary used in container `HEALTHCHECK` commands to verify the environment or connectivity.
@@ -310,6 +321,14 @@ Server configuration is driven by environment variables, which are defined in de
   - Redirect hit/miss counts.
   - Basic DB metrics (errors, timeouts).
   - Exposed via `/metrics` and exported via OTLP.
+
+### 8.5 Testing & CI
+
+- Unit tests cover helpers (config placeholder resolution, query adapter, HTTP client singleton) and link creation strategies.
+- Integration test (`crates/vym-fyi-model/tests/config_flow.rs`) validates end-to-end config/env resolution.
+- Run locally: `cargo test --workspace --all-targets`.
+- Coverage recommendation: `cargo llvm-cov --workspace --all-features --fail-under-lines 70`.
+- CI: `.github/workflows/ci.yml` runs lint/format and the full test suite on each push/PR.
 
 ---
 

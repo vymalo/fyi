@@ -12,6 +12,22 @@ This repository contains a small, multi‑tenant URL shortener implemented as a 
 
 The services are intended to run in containers and on Kubernetes, using the existing `Dockerfile`, `compose.yaml`, and Helm charts under `charts/`.
 
+## Design patterns in the app layer
+
+- Strategy: `ProvidedSlugStrategy` vs `GeneratedSlugStrategy` choose link-creation flow (slug supplied vs generated) in `crates/vym-fyi-server-crud/src/handlers/links.rs`.
+- Facade: `CrudApp` and `RedirectApp` wrap pools, factories, and API-key stores (`crates/vym-fyi-server-crud/src/app.rs`, `crates/vym-fyi-server-redirect/src/app.rs`).
+- Factory: `RepositoryFactory` with `PgRepositoryFactory` supplies typed repositories (`crates/vym-fyi-model/src/services/repos.rs`).
+- Adapter: `LinkListQueryAdapter` + `QueryParamsBuilder` convert list inputs to HTTP query params in one place (`crates/vym-fyi-model/src/services/query_adapter.rs`), reused by CLI and Node bindings.
+- Singleton: `HttpClient::global` exposes a shared HTTP client for reuse across crates (`crates/vym-fyi-model/src/services/http_client.rs`).
+
+## Testing and coverage
+
+- Unit tests live next to services (config placeholder resolution, query adapter, HTTP client singleton, link creation strategies).
+- Integration test for config/env resolution: `crates/vym-fyi-model/tests/config_flow.rs`.
+- Run everything locally: `cargo test --workspace --all-targets`.
+- Coverage (recommend 70%+): `cargo llvm-cov --workspace --all-features --fail-under-lines 70`.
+- CI runs `cargo test --workspace --all-targets` via `.github/workflows/ci.yml`.
+
 ## Roadmap
 
 **0–3 months (Foundations)**
