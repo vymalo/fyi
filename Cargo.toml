@@ -42,6 +42,9 @@ tracing = { version = "0", features = ["attributes", "async-await", "std"] }
 tower-http = { version = "0.6", features = ["fs"] }
 
 mimalloc = "0"
+once_cell = "1"
+async-trait = "0.1"
+tempfile = "3"
 
 [profile.prod]
 inherits = "release"

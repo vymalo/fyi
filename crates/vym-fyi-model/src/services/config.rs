@@ -96,3 +96,26 @@ pub fn bind_addr_from_env(default_port: u16) -> AppResult<SocketAddr> {
     addr.parse()
         .map_err(|e| AppError::Config(format!("invalid bind address {}: {}", addr, e)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_env_placeholders() {
+        unsafe { std::env::set_var("TEST_KEY", "secret-value") };
+        let raw = "value-$(TEST_KEY)-tail";
+        let resolved = resolve_env_placeholders(raw).expect("placeholder should resolve");
+        assert_eq!(resolved, "value-secret-value-tail");
+    }
+
+    #[test]
+    fn missing_env_placeholder_errors() {
+        unsafe { std::env::remove_var("MISSING_KEY") };
+        let err = resolve_env_placeholders("$(MISSING_KEY)").unwrap_err();
+        match err {
+            AppError::MissingEnvVar { name } => assert_eq!(name, "MISSING_KEY"),
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+}

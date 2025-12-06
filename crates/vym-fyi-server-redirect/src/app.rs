@@ -1,11 +1,12 @@
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use std::sync::Arc;
 use vym_fyi_model::models::errors::AppResult;
 use vym_fyi_model::services::repos::{PgRepositoryFactory, RepositoryFactory, ShortLinkRepository};
 
 /// Facade over redirect server components.
 #[derive(Clone)]
 pub struct RedirectApp {
-    repos: PgRepositoryFactory,
+    repos: Arc<dyn RepositoryFactory>,
 }
 
 /// Builder for `RedirectApp`.
@@ -37,7 +38,7 @@ impl RedirectAppBuilder {
             .connect(&self.database_url_ro)
             .await?;
 
-        let repos = PgRepositoryFactory::new(pool);
+        let repos: Arc<dyn RepositoryFactory> = Arc::new(PgRepositoryFactory::new(pool));
 
         Ok(RedirectApp { repos })
     }

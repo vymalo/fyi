@@ -27,6 +27,9 @@ pub enum AppError {
     #[error("Server error: {0}")]
     Server(String),
 
+    #[error("Conflict: {0}")]
+    Conflict(String),
+
     // CRL / OpenSSL FFI
     #[error("CRL/OpenSSL FFI error in {func}")]
     CrlFfi { func: &'static str },

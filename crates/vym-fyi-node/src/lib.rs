@@ -3,6 +3,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use vym_fyi_model::models::errors::AppResult;
 use vym_fyi_model::services::http_client::HttpClient;
+use vym_fyi_model::services::query_adapter::{LinkListQueryAdapter, QueryParamsBuilder};
 
 #[napi(object)]
 pub struct CrudOptions {
@@ -43,6 +44,23 @@ pub struct ListLinksInput {
     pub use_master: Option<bool>,
 }
 
+impl LinkListQueryAdapter for ListLinksInput {
+    fn to_query_params(&self) -> Vec<(&'static str, String)> {
+        let mut builder = QueryParamsBuilder::new();
+        builder
+            .push_value("page", self.page)
+            .push_value("per_page", self.per_page)
+            .push_trimmed("slug", &self.slug)
+            .push_trimmed("target_contains", &self.target_contains)
+            .push_value("active", self.active)
+            .push_trimmed("created_before", &self.created_before)
+            .push_trimmed("created_after", &self.created_after)
+            .push_trimmed("expires_before", &self.expires_before)
+            .push_trimmed("expires_after", &self.expires_after);
+        builder.into_vec()
+    }
+}
+
 #[napi(object)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkResponse {
@@ -75,7 +93,7 @@ pub async fn list_links(options: CrudOptions, input: ListLinksInput) -> Result<V
 }
 
 async fn perform_ping(opts: &CrudOptions, use_master: bool) -> AppResult<()> {
-    let client = HttpClient::new_with_defaults()?;
+    let client = HttpClient::global()?;
     let url = format!("{}/health", opts.base_url.trim_end_matches('/'));
 
     client
@@ -95,7 +113,7 @@ async fn perform_create_link(
     input: &CreateLinkInput,
     use_master: bool,
 ) -> AppResult<LinkResponse> {
-    let client = HttpClient::new_with_defaults()?;
+    let client = HttpClient::global()?;
     let url = format!("{}/api/links", opts.base_url.trim_end_matches('/'));
 
     let mut body = serde_json::json!({
@@ -124,59 +142,11 @@ async fn perform_list_links(
     input: &ListLinksInput,
     use_master: bool,
 ) -> AppResult<Vec<LinkResponse>> {
-    let client = HttpClient::new_with_defaults()?;
+    let client = HttpClient::global()?;
     let base = opts.base_url.trim_end_matches('/');
     let url = format!("{}/api/links", base);
 
-    let mut query_params: Vec<(&str, String)> = Vec::new();
-
-    if let Some(page) = input.page {
-        query_params.push(("page", page.to_string()));
-    }
-
-    if let Some(per_page) = input.per_page {
-        query_params.push(("per_page", per_page.to_string()));
-    }
-
-    if let Some(slug) = &input.slug
-        && !slug.trim().is_empty()
-    {
-        query_params.push(("slug", slug.clone()));
-    }
-
-    if let Some(target_contains) = &input.target_contains
-        && !target_contains.trim().is_empty()
-    {
-        query_params.push(("target_contains", target_contains.clone()));
-    }
-
-    if let Some(active) = input.active {
-        query_params.push(("active", active.to_string()));
-    }
-
-    if let Some(created_before) = &input.created_before
-        && !created_before.trim().is_empty()
-    {
-        query_params.push(("created_before", created_before.clone()));
-    }
-
-    if let Some(created_after) = &input.created_after
-        && !created_after.trim().is_empty()
-    {
-        query_params.push(("created_after", created_after.clone()));
-    }
-
-    if let Some(expires_before) = &input.expires_before
-        && !expires_before.trim().is_empty()
-    {
-        query_params.push(("expires_before", expires_before.clone()));
-    }
-
-    if let Some(expires_after) = &input.expires_after
-        && !expires_after.trim().is_empty()
-    {
-        query_params.push(("expires_after", expires_after.clone()));
-    }
+    let query_params = input.to_query_params();
 
     let request = client
         .client()

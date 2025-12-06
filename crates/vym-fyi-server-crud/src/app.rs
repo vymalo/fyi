@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 use tracing::{info, warn};
@@ -72,7 +73,7 @@ impl ApiKeyStore {
 #[derive(Clone)]
 pub struct CrudApp {
     pool: Pool<Postgres>,
-    repos: PgRepositoryFactory,
+    repos: Arc<dyn RepositoryFactory>,
     pub api_keys: ApiKeyStore,
 }
 
@@ -115,7 +116,7 @@ impl CrudAppBuilder {
         // Run embedded migrations (crates/vym-fyi-server-crud/migrations).
         sqlx::migrate!().run(&pool).await?;
 
-        let repos = PgRepositoryFactory::new(pool.clone());
+        let repos: Arc<dyn RepositoryFactory> = Arc::new(PgRepositoryFactory::new(pool.clone()));
 
         if let Some(path) = self.tenants_config_path {
             let path_buf = Path::new(&path).to_path_buf();

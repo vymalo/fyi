@@ -15,6 +15,7 @@ sqlx.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 axum.workspace = true
+async-trait.workspace = true
 
 [dependencies.vym-fyi-model]
 workspace = true

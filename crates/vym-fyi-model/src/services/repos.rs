@@ -1,7 +1,7 @@
 use sqlx::{Pool, Postgres, Row};
 use uuid::Uuid;
 
-use crate::models::errors::AppResult;
+use crate::models::errors::{AppError, AppResult};
 
 /// Repository for tenant-related database operations.
 #[derive(Clone)]
@@ -82,20 +82,27 @@ impl ShortLinkRepository {
             ON CONFLICT (slug) DO UPDATE
                 SET target_url = EXCLUDED.target_url,
                     is_active = TRUE
+                WHERE short_links.tenant_id = EXCLUDED.tenant_id
             RETURNING slug, target_url, is_active
             "#,
         )
         .bind(slug)
         .bind(target_url)
         .bind(tenant_id)
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        Ok((
-            row.get("slug"),
-            row.get("target_url"),
-            row.get::<bool, _>("is_active"),
-        ))
+        if let Some(row) = row {
+            Ok((
+                row.get("slug"),
+                row.get("target_url"),
+                row.get::<bool, _>("is_active"),
+            ))
+        } else {
+            Err(AppError::Conflict(
+                "slug already exists for a different tenant".into(),
+            ))
+        }
     }
 
     /// List short links for a single tenant as (slug, target_url, is_active)
@@ -216,14 +223,14 @@ impl ShortLinkRepository {
             }
         }
 
-        Err(crate::models::errors::AppError::Config(
+        Err(AppError::Config(
             "Failed to generate unique slug after several attempts".into(),
         ))
     }
 }
 
 /// Abstract factory for repositories.
-pub trait RepositoryFactory {
+pub trait RepositoryFactory: Send + Sync {
     fn tenant_repo(&self) -> TenantRepository;
     fn short_link_repo(&self) -> ShortLinkRepository;
 }

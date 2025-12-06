@@ -7,6 +7,7 @@ use clap::Parser;
 use env_logger::{Builder, Env};
 use vym_fyi_model::models::errors::AppResult;
 use vym_fyi_model::services::http_client::HttpClient;
+use vym_fyi_model::services::query_adapter::{LinkListQueryAdapter, QueryParamsBuilder};
 
 pub mod shared;
 
@@ -22,6 +23,23 @@ struct LinksListParams {
     created_after: Option<String>,
     expires_before: Option<String>,
     expires_after: Option<String>,
+}
+
+impl LinkListQueryAdapter for LinksListParams {
+    fn to_query_params(&self) -> Vec<(&'static str, String)> {
+        let mut builder = QueryParamsBuilder::new();
+        builder
+            .push_value("page", self.page)
+            .push_value("per_page", self.per_page)
+            .push_trimmed("slug", &self.slug)
+            .push_trimmed("target_contains", &self.target_contains)
+            .push_value("active", self.active)
+            .push_trimmed("created_before", &self.created_before)
+            .push_trimmed("created_after", &self.created_after)
+            .push_trimmed("expires_before", &self.expires_before)
+            .push_trimmed("expires_after", &self.expires_after);
+        builder.into_vec()
+    }
 }
 
 /// Entry point: configures logging and runs the app workflow.
@@ -95,7 +113,7 @@ fn select_api_key(client: &ResolvedClient, use_master: bool) -> &str {
 }
 
 async fn ping(client: &ResolvedClient, use_master: bool) -> AppResult<()> {
-    let http = HttpClient::new_with_defaults()?;
+    let http = HttpClient::global()?;
     let url = format!("{}/health", client.base_url.trim_end_matches('/'));
 
     info!("Pinging CRUD server at {}", url);
@@ -120,7 +138,7 @@ async fn links_create(
     slug: Option<String>,
     target: String,
 ) -> AppResult<()> {
-    let http = HttpClient::new_with_defaults()?;
+    let http = HttpClient::global()?;
     let url = format!("{}/api/links", client.base_url.trim_end_matches('/'));
 
     match &slug {
@@ -162,7 +180,7 @@ async fn links_list(
     use_master: bool,
     params: LinksListParams,
 ) -> AppResult<()> {
-    let http = HttpClient::new_with_defaults()?;
+    let http = HttpClient::global()?;
     let base = client.base_url.trim_end_matches('/');
     let url = format!("{}/api/links", base);
 
@@ -176,56 +194,7 @@ async fn links_list(
         .header("X-API-Key", api_key)
         .header("X-Client-Id", &client.id);
 
-    let mut query_params: Vec<(&str, String)> = Vec::new();
-
-    if let Some(p) = params.page {
-        query_params.push(("page", p.to_string()));
-    }
-
-    if let Some(pp) = params.per_page {
-        query_params.push(("per_page", pp.to_string()));
-    }
-
-    if let Some(s) = params.slug
-        && !s.trim().is_empty()
-    {
-        query_params.push(("slug", s));
-    }
-
-    if let Some(t) = params.target_contains
-        && !t.trim().is_empty()
-    {
-        query_params.push(("target_contains", t));
-    }
-
-    if let Some(a) = params.active {
-        query_params.push(("active", a.to_string()));
-    }
-
-    if let Some(cb) = params.created_before
-        && !cb.trim().is_empty()
-    {
-        query_params.push(("created_before", cb));
-    }
-
-    if let Some(ca) = params.created_after
-        && !ca.trim().is_empty()
-    {
-        query_params.push(("created_after", ca));
-    }
-
-    if let Some(eb) = params.expires_before
-        && !eb.trim().is_empty()
-    {
-        query_params.push(("expires_before", eb));
-    }
-
-    if let Some(ea) = params.expires_after
-        && !ea.trim().is_empty()
-    {
-        query_params.push(("expires_after", ea));
-    }
-
+    let query_params = params.to_query_params();
     if !query_params.is_empty() {
         req = req.query(&query_params);
     }

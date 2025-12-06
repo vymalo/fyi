@@ -1,4 +1,5 @@
 pub mod http_client;
+pub mod query_adapter;
 
 pub mod logging;
 

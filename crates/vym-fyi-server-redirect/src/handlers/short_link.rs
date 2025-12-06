@@ -19,7 +19,12 @@ pub async fn redirect_short_link(
     State(app): State<RedirectApp>,
 ) -> Response {
     debug!("Redirect requested: slug={}", slug);
-    let slug_counter = metrics::counter!("redirect_slug_requests_total", "slug" => slug.clone());
+    // Bucket slug lengths to avoid unbounded label cardinality from user input.
+    let slug_counter = metrics::counter!(
+        "redirect_slug_requests_total",
+        "slug" => slug.clone(),
+        "slug_len" => bucket_slug_len(slug.len())
+    );
     slug_counter.increment(1);
 
     let repo: ShortLinkRepository = app.short_link_repository();
@@ -51,5 +56,16 @@ pub async fn redirect_short_link(
                 .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
             response
         }
+    }
+}
+
+fn bucket_slug_len(len: usize) -> &'static str {
+    match len {
+        0 => "len_0",
+        1..=4 => "len_1_4",
+        5..=8 => "len_5_8",
+        9..=12 => "len_9_12",
+        13..=20 => "len_13_20",
+        _ => "len_over_20",
     }
 }

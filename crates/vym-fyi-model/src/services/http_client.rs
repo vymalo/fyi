@@ -1,10 +1,14 @@
 use std::time::Duration;
 
-use crate::models::errors::AppResult;
+use crate::models::errors::{AppError, AppResult};
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
+
+static DEFAULT_HTTP_CLIENT: Lazy<Result<HttpClient, AppError>> =
+    Lazy::new(HttpClient::new_with_defaults);
 
 #[derive(Clone)]
 pub struct HttpClient {
@@ -30,6 +34,17 @@ impl HttpClient {
 
     pub fn client(&self) -> &Client {
         &self.client
+    }
+
+    /// Shared HTTP client (Singleton) with the default configuration.
+    pub fn global() -> AppResult<&'static HttpClient> {
+        match &*DEFAULT_HTTP_CLIENT {
+            Ok(client) => Ok(client),
+            Err(err) => Err(AppError::Config(format!(
+                "failed to initialize shared HTTP client: {}",
+                err
+            ))),
+        }
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -70,5 +85,21 @@ impl HttpClient {
             .await?
             .error_for_status()?;
         Ok(resp.json().await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn global_returns_same_instance() {
+        let first = HttpClient::global().expect("global client should initialize");
+        let second = HttpClient::global().expect("global client should initialize");
+
+        assert!(
+            std::ptr::eq(first, second),
+            "global client should be a singleton"
+        );
     }
 }
