@@ -7,11 +7,3 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-reqwest.workspace = true
-env_logger.workspace = true
-log.workspace = true
-clap.workspace = true
-
-[dependencies.tokio]
-workspace = true
-features = ["rt"]

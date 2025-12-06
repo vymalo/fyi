@@ -6,7 +6,6 @@
 
 !crates/vym-fyi-server-redirect/src
 !crates/vym-fyi-server-redirect/Cargo.toml
-!crates/vym-fyi-server-redirect/Rocket.toml
 
 !crates/vym-fyi-model/src
 !crates/vym-fyi-model/Cargo.toml
@@ -24,4 +23,3 @@
 !crates/vym-fyi-server-crud/migrations
 !crates/vym-fyi-server-crud/src
 !crates/vym-fyi-server-crud/Cargo.toml
-!crates/vym-fyi-server-crud/Rocket.toml

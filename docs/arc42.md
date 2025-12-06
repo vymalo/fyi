@@ -221,7 +221,7 @@ From `Cargo.toml`:
   - `vym-fyi-server-redirect` (target: `redirect`).
   - `vym-fyi-healthcheck`.
 - Runtime images use `gcr.io/distroless/static-debian12:nonroot` for a minimal surface area.
-- Containers are configured via environment variables (DB URLs, OTLP endpoint, HTTP bind settings like `ROCKET_ADDRESS`/`ROCKET_PORT` for compatibility, etc.).
+- Containers are configured via environment variables.
 
 ### 7.2 Kubernetes and Helm
 

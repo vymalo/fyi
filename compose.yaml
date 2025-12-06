@@ -19,8 +19,8 @@ services:
       - "8000:8000"
     environment:
       RUST_LOG: "info"
-      ROCKET_ADDRESS: "0.0.0.0"
-      ROCKET_PORT: "8000"
+      ADDRESS: "0.0.0.0"
+      PORT: "8000"
       # Read/write connection for CRUD API (tenant and link management).
       DATABASE_URL: "postgres://vymalo:vymalo@db:5432/vymalo"
       # Optional: path to tenants config inside the container (used for tenant sync).
@@ -35,7 +35,7 @@ services:
       # Mount a local tenants.yaml (same structure as CLI config.yaml) into the container.
       - ./.docker/tenants.yaml:/config/tenants.yaml:ro
     healthcheck:
-      test: [ "CMD", "/app/healthcheck" ]
+      test: [ "CMD", "/app/healthcheck", "--host", "127.0.0.1", "--port", "8000", "--path", "/health" ]
       interval: 30s
       timeout: 3s
       start_period: 10s
@@ -50,13 +50,13 @@ services:
       - "8100:8000"
     environment:
       RUST_LOG: "info"
-      ROCKET_ADDRESS: "0.0.0.0"
-      ROCKET_PORT: "8000"
+      ADDRESS: "0.0.0.0"
+      PORT: "8000"
       DATABASE_URL_RO: "postgres://vymalo:vymalo@db:5432/vymalo"
     depends_on:
       - db
     healthcheck:
-      test: [ "CMD", "/app/healthcheck" ]
+      test: [ "CMD", "/app/healthcheck", "--host", "127.0.0.1", "--port", "8000", "--path", "/health" ]
       interval: 30s
       timeout: 3s
       start_period: 10s
@@ -114,11 +114,13 @@ services:
         && generate-dashboard -o /out/redirect_by_slug.json /dashboards_src/redirect_by_slug.dashboard.py \
         && generate-dashboard -o /out/redirect_ip_slug.json /dashboards_src/redirect_ip_slug.dashboard.py
 
-  ubuntu:
+  test-curl:
     image: curlimages/curl
     depends_on:
-      - redirect
-      - crud
+      redirect:
+        condition: service_healthy
+      crud:
+        condition: service_healthy
     command:
       - /bin/sh
       - -c

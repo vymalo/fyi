@@ -28,8 +28,6 @@ jobs:
         flavour:
           - Server
           - Redirect
-          - Server K8S
-          - Redirect K8S
         include:
           - flavour: Server
             suffix: "-crud"
@@ -37,12 +35,6 @@ jobs:
           - flavour: Redirect
             suffix: "-redirect"
             docker_target: "redirect"
-          - flavour: Server K8S
-            suffix: "-crud-k8s"
-            docker_target: "crud_k8s"
-          - flavour: Redirect K8S
-            suffix: "-redirect-k8s"
-            docker_target: "redirect_k8s"
     permissions:
       packages: write
       contents: read
@@ -92,6 +84,7 @@ jobs:
         with:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest${{ matrix.suffix }},enable={{is_default_branch}}
             type=raw,value={{branch}}
             type=schedule,pattern={{date 'YYYYMMDD-hhmmss' tz='Europe/Berlin'}}
             type=sha,format=long
@@ -111,7 +104,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
           provenance: true

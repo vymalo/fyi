@@ -59,8 +59,6 @@ You can run each server directly:
 - Redirect server:
   - `cargo run -p vym-fyi-server-redirect -- <args>`
 
-Both servers run on Axum; they still honor `ROCKET_` environment variables (for example `ROCKET_ADDRESS`, `ROCKET_PORT`) for bind address/port compatibility and additional app‑specific environment variables for database URLs and telemetry.
-
 The healthcheck binary can be run as:
 
 - `cargo run -p vym-fyi-healthcheck`

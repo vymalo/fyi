@@ -1,7 +1,8 @@
 global:
+  domain: redirect.example.com
   version: latest
 
-webhook:
+redirect:
   defaultPodOptions:
     securityContext:
       runAsUser: 1001
@@ -13,19 +14,19 @@ webhook:
       replicas: 1
       pod:
         labels:
-          main: vym-fyi-server-redirect
+          app.kubernetes.io/name: vym-fyi-server-redirect
         affinity:
           podAntiAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
               - labelSelector:
                   matchExpressions:
-                    - key: app
+                    - key: app.kubernetes.io/name
                       operator: In
                       values:
                         - vym-fyi-server-redirect
-                topologyKey: "kubernetes.io/hostname"
+                topologyKey: kubernetes.io/hostname
       labels:
-        main: main-app
+        app.kubernetes.io/component: redirect
       containers:
         app:
           image:
@@ -42,39 +43,19 @@ webhook:
               memory: 512Mi
 
           env:
-            PORT: 8000
-            SERVER_BASE_URL: 'https://cert.adorsys'
-            SPOOL_DIR: '/var/cache/vym-fyi-server-redirect/spool'
-
-            RUST_LOG: 'warn'
-            ROCKET_ADDRESS: '0.0.0.0'
-
-            OAUTH_ISSUER: https://keycloak.login/realms/adorsys
-            OAUTH_CLIENT_ID:
-              valueFrom:
-                secretKeyRef:
-                  name: webhook-oauth2-client-credentials
-                  key: client-id
-            OAUTH_CLIENT_SECRET:
-              valueFrom:
-                secretKeyRef:
-                  name: webhook-oauth2-client-credentials
-                  key: client-secret
-            WEBHOOK_BASIC_USER:
-              valueFrom:
-                secretKeyRef:
-                  name: webhook-basic-credentials
-                  key: user
-            WEBHOOK_BASIC_PASSWORD:
-              valueFrom:
-                secretKeyRef:
-                  name: webhook-basic-credentials
-                  key: password
+            RUST_LOG: info
+            ADDRESS: 0.0.0.0
+            PORT: "8000"
+            DATABASE_URL_RO: postgres://vymalo:vymalo@db:5432/vymalo
 
           probes:
             startup:
               enabled: true
+              custom: true
               spec:
+                httpGet:
+                  path: /health
+                  port: 8000
                 initialDelaySeconds: 0
                 periodSeconds: 5
 
@@ -82,9 +63,9 @@ webhook:
               enabled: true
               custom: true
               spec:
-                exec:
-                  command:
-                    - /app/healthcheck
+                httpGet:
+                  path: /health
+                  port: 8000
                 initialDelaySeconds: 0
                 periodSeconds: 5
 
@@ -92,11 +73,12 @@ webhook:
               enabled: true
               custom: true
               spec:
-                exec:
-                  command:
-                    - /app/healthcheck
+                httpGet:
+                  path: /health
+                  port: 8000
                 initialDelaySeconds: 0
                 periodSeconds: 5
+
   service:
     app:
       enabled: true
@@ -113,16 +95,13 @@ webhook:
     app:
       enabled: false
       annotations: { }
-      className: 'nginx'
+      className: nginx
       hosts:
-        - host: redirect.example.com
+        - host: '{{ .Values.global.domain }}'
           paths:
             - path: /
               pathType: Prefix
               service:
                 identifier: app
                 port: http
-      tls:
-        - secretName: redirect-example-com
-          hosts:
-            - redirect.example.com
+      tls: []

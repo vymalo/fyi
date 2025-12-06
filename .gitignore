@@ -11,6 +11,8 @@ target
 *.csv
 *.crl
 
+site/
+
 tmp
 test.yaml
 *.tgz
