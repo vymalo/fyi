@@ -57,63 +57,12 @@ jobs:
           name: vym-fyi-client-${{ matrix.target }}
           path: vym-fyi-client-${{ matrix.target }}
 
-  build-macos:
-    name: Build CLI for macOS
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-apple-darwin
-            runner: macos-15-intel
-            brew_prefix: /usr/local/opt/openssl@3
-          - target: aarch64-apple-darwin
-            runner: macos-latest
-            brew_prefix: /opt/homebrew/opt/openssl@3
-    runs-on: ${{ matrix.runner }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
-        with:
-          fetch-depth: "0"
-          persist-credentials: 'false'
-
-      # Note: intentionally avoid caches in release build to prevent cache poisoning
-
-      - name: Install OpenSSL and pkg-config
-        run: |
-          brew update
-          brew install pkg-config openssl@3
-
-      - name: Build with cross
-        uses: houseabsolute/actions-rust-cross@6ad5303397f8fc3350d7c3c953356a66978c24ac
-        with:
-          command: "build"
-          target: ${{ matrix.target }}
-          args: "-p vym-fyi-client --profile prod"
-        env:
-          PKG_CONFIG_PATH: ${{ matrix.brew_prefix }}/lib/pkgconfig
-          OPENSSL_NO_VENDOR: "1"
-
-      - name: Rename resource
-        env:
-          TARGET: ${{ matrix.target }}
-        run: mv "target/$TARGET/prod/vym-fyi-client" "vym-fyi-client-$TARGET"
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
-        with:
-          name: vym-fyi-client-${{ matrix.target }}
-          path: vym-fyi-client-${{ matrix.target }}
-
   release:
     name: Release
     permissions:
       contents: write
     needs:
       - build-linux
-      - build-macos
     runs-on: ubuntu-latest
     steps:
       - name: Get the version
