@@ -14,13 +14,7 @@ mimalloc.workspace = true
 sqlx.workspace = true
 uuid.workspace = true
 chrono.workspace = true
-log = "0.4.28"
 axum.workspace = true
-axum-prometheus.workspace = true
-tower.workspace = true
-hyper.workspace = true
-metrics.workspace = true
-tower-http.workspace = true
 
 [dependencies.vym-fyi-model]
 workspace = true

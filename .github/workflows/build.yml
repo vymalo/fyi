@@ -26,8 +26,8 @@ jobs:
     strategy:
       matrix:
         flavour:
-          - OAuth2
-          - Webhook
+          - Server
+          - Redirect
         include:
           - flavour: Server
             suffix: "-crud"

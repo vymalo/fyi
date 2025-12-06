@@ -2887,17 +2887,11 @@ name = "vym-fyi-server-crud"
 version = "1.0.0"
 dependencies = [
  "axum",
- "axum-prometheus",
  "chrono",
- "hyper",
- "log",
- "metrics",
  "mimalloc",
  "serde",
  "sqlx",
  "tokio",
- "tower",
- "tower-http",
  "tracing",
  "uuid",
  "vym-fyi-model",
@@ -2908,15 +2902,11 @@ name = "vym-fyi-server-redirect"
 version = "1.0.0"
 dependencies = [
  "axum",
- "axum-prometheus",
- "hyper",
  "metrics",
  "mimalloc",
  "serde",
  "sqlx",
  "tokio",
- "tower",
- "tower-http",
  "tracing",
  "vym-fyi-model",
 ]

@@ -62,5 +62,47 @@ services:
       start_period: 10s
       retries: 3
 
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./.docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    depends_on:
+      - redirect
+      - crud
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+    volumes:
+      # Dashboards (JSON files, including axum_http_overview.json)
+      - grafana:/var/lib/grafana
+      - ./.docker/grafana/axum_http_overview.json:/tmp/grafana_dashboards/axum_http_overview.json:ro
+      # Provisioning for datasources and dashboards
+      - ./.docker/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+
+  ubuntu:
+    image: curlimages/curl
+    depends_on:
+      - redirect
+      - crud
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -ex
+
+        tail -f /dev/null
+
 volumes:
   db_data: {}
+  grafana: {}
