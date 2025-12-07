@@ -1,0 +1,107 @@
+global:
+  domain: redirect.example.com
+  version: latest
+
+redirect:
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 1001
+      runAsGroup: 1001
+
+  controllers:
+    app:
+      type: deployment
+      replicas: 1
+      pod:
+        labels:
+          app.kubernetes.io/name: vym-fyi-server-redirect
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - vym-fyi-server-redirect
+                topologyKey: kubernetes.io/hostname
+      labels:
+        app.kubernetes.io/component: redirect
+      containers:
+        app:
+          image:
+            repository: ghcr.io/vymalo/fyi-redirect
+            tag: '{{ .Values.global.version }}'
+            pullPolicy: IfNotPresent
+
+          resources:
+            requests:
+              cpu: 125m
+              memory: 256Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
+
+          env:
+            RUST_LOG: info
+            ADDRESS: 0.0.0.0
+            PORT: "8000"
+            DATABASE_URL_RO: postgres://vymalo:vymalo@db:5432/vymalo
+
+          probes:
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            readiness:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            liveness:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+  service:
+    app:
+      enabled: true
+      annotations: { }
+      type: ClusterIP
+      controller: app
+      ports:
+        http:
+          enabled: true
+          port: 8000
+          targetPort: 8000
+
+  ingress:
+    app:
+      enabled: false
+      annotations: { }
+      className: nginx
+      hosts:
+        - host: '{{ .Values.global.domain }}'
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: app
+                port: http
+      tls: []

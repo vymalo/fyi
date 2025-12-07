@@ -1,0 +1,64 @@
+[workspace]
+members = [
+    "crates/vym-fyi-server-redirect",
+    "crates/vym-fyi-client",
+    "crates/vym-fyi-model",
+    "crates/vym-fyi-server-crud",
+    "crates/vym-fyi-healthcheck",
+    "crates/vym-fyi-node"
+]
+resolver = "3"
+
+[workspace.dependencies]
+vym-fyi-model = { path = "crates/vym-fyi-model" }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing", "net", "process", "fs"] }
+thiserror = "2"
+axum = { version = "0.8", features = ["json"] }
+axum-prometheus = "0.9"
+tower = "0.5"
+metrics = "0.24"
+
+napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt"] }
+napi-derive = "3"
+napi-build = "2.3.1"
+
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "gzip", "brotli", "deflate"] }
+log = { version = "0.4", features = ["std"] }
+env_logger = "0"
+rand = "0.9"
+rand_core = "0.9"
+clap = { version = "4", features = ["derive", "env"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "migrate", "uuid", "chrono"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing = { version = "0", features = ["attributes", "async-await", "std"] }
+
+tower-http = { version = "0.6", features = ["fs"] }
+
+mimalloc = "0"
+once_cell = "1"
+async-trait = "0.1"
+tempfile = "3"
+
+[profile.prod]
+inherits = "release"
+lto = true
+opt-level = "z"
+codegen-units = 1
+incremental = false
+strip = true
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+authors = [
+    "Stephane Segning <selastlambou@gmail.com>"
+]

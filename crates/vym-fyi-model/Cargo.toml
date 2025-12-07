@@ -1,0 +1,29 @@
+[package]
+name = "vym-fyi-model"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
+tracing.workspace = true
+clap.workspace = true
+rand_core.workspace = true
+rand.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+tracing-subscriber.workspace = true
+axum.workspace = true
+axum-prometheus.workspace = true
+metrics.workspace = true
+tower-http.workspace = true
+once_cell.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

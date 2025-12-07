@@ -1,0 +1,136 @@
+global:
+  domain: crud.example.com
+  version: latest
+
+crud:
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 1001
+      runAsGroup: 1001
+
+  controllers:
+    main:
+      type: deployment
+      replicas: 1
+      pod:
+        labels:
+          app.kubernetes.io/name: vym-fyi-server-crud
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - vym-fyi-server-crud
+                topologyKey: kubernetes.io/hostname
+      labels:
+        app.kubernetes.io/component: crud
+      containers:
+        main:
+          image:
+            repository: ghcr.io/vymalo/fyi-crud
+            tag: '{{ .Values.global.version }}'
+            pullPolicy: IfNotPresent
+
+          resources:
+            requests:
+              cpu: 125m
+              memory: 256Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
+
+          env:
+            RUST_LOG: info
+            ADDRESS: 0.0.0.0
+            PORT: "8000"
+            DATABASE_URL: postgres://vymalo:vymalo@db:5432/vymalo
+            TENANTS_CONFIG_PATH: /config/tenants.yaml
+            MASTER_API_KEY: ""
+            CLIENT_A_SECRET: ""
+            CLIENT_B_SECRET: ""
+
+          probes:
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            readiness:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+            liveness:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 0
+                periodSeconds: 5
+
+  service:
+    main:
+      enabled: true
+      annotations: { }
+      type: ClusterIP
+      controller: main
+      ports:
+        http:
+          enabled: true
+          port: 8000
+          targetPort: 8000
+
+  ingress:
+    main:
+      enabled: false
+      annotations: { }
+      className: nginx
+      hosts:
+        - host: '{{ .Values.global.domain }}'
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: main
+                port: http
+      tls: []
+
+  configMaps:
+    tenants:
+      enabled: false
+      data:
+        tenants.yaml: |
+          server:
+            base_url: http://crud.vymalo:8000
+          clients:
+            example:
+              name: example
+              api_key: "$(EXAMPLE_CLIENT_SECRET)"
+              role: admin
+
+  persistence:
+    tenantsConfig:
+      enabled: false
+      type: configMap
+      identifier: tenants
+      advancedMounts:
+        main:
+          main:
+            - path: /config/tenants.yaml
+              subPath: tenants.yaml
+              readOnly: true
