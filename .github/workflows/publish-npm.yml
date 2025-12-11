@@ -81,8 +81,11 @@ jobs:
           npm pkg set version="${GITHUB_REF#refs/tags/v}"
 
       - name: Publish to npm
-        if: github.event_name == 'release' && github.event.action == 'published' && matrix.target == 'x86_64-unknown-linux-gnu'
-        working-directory: ./crates/vym-fyi-node/npm
+        if: github.event_name == 'release' && matrix.target == 'x86_64-unknown-linux-gnu'
+        working-directory: ./crates/vym-fyi-node
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          cd npm
+          npm publish --access public
