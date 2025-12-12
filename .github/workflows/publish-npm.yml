@@ -39,7 +39,11 @@ jobs:
       - name: Install and build
         working-directory: ./crates/vym-fyi-node
         run: |
-          npm ci
+          # First ensure package-lock.json exists
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only
+          fi
+          npm install
           npm run build -- --target x86_64-unknown-linux-gnu
 
       - name: Publish to npm
