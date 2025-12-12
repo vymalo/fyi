@@ -42,6 +42,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
+          cache-dependency-path: "crates/vym-fyi-node/package-lock.json"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -60,21 +61,19 @@ jobs:
 
       - name: Install build dependencies
         if: matrix.os == 'ubuntu-latest'
+        working-directory: ./crates/vym-fyi-node
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential
 
       - name: Install dependencies
         working-directory: ./crates/vym-fyi-node
-        run: npm install
-
-      - name: Build the package
-        working-directory: ./crates/vym-fyi-node
         run: |
+          npm install
           npm run build -- --target ${{ matrix.target }}
 
       - name: Prepare package for publishing
-        if: github.event_name == 'release' && github.event.action == 'published' && matrix.target == 'x86_64-unknown-linux-gnu'
+        if: github.event_name == 'release' && matrix.target == 'x86_64-unknown-linux-gnu'
         working-directory: ./crates/vym-fyi-node
         run: |
           cd npm
