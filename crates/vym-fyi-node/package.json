@@ -10,7 +10,7 @@
   "scripts": {
     "build": "napi build --release",
     "build:debug": "napi build",
-    "prepublishOnly": "napi prepublish -t npm",
+    "prepublishOnly": "napi prepublish -t npm --minified --target x86_64-unknown-linux-gnu",
     "test": "node -e \"require('.')\""
   },
   "engines": {

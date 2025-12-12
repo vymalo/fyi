@@ -32,8 +32,27 @@ jobs:
       - name: Build and package
         working-directory: ./crates/vym-fyi-node
         run: |
+          echo "=== Installing dependencies ==="
           npm install
-          npm run build -- --target x86_64-unknown-linux-gnu
+
+          echo "=== Cleaning previous build ==="
+          rm -rf npm
+
+          echo "=== Building package ==="
+          RUST_BACKTRACE=1 napi build --release --target x86_64-unknown-linux-gnu
+
+          echo "=== Verifying build output ==="
+          ls -la
+
+          echo "=== Running prepublish ==="
+          npx napi prepublish -t npm --minified --target x86_64-unknown-linux-gnu
+
+          echo "=== Verifying npm package ==="
+          if [ ! -d "npm" ]; then
+            echo "Error: npm directory not created!"
+            exit 1
+          fi
+          ls -la npm/
 
       - name: Publish to npm
         if: github.event_name == 'release'
@@ -41,7 +60,18 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          echo "=== Setting up npm authentication ==="
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+
+          echo "=== Verifying npm directory ==="
+          if [ ! -d "npm" ]; then
+            echo "Error: npm directory not found after build!"
+            ls -la
+            exit 1
+          fi
+
+          echo "=== Publishing package ==="
           cd npm
           npm pkg set version="${GITHUB_REF#refs/tags/v}"
+          npm whoami
           npm publish --access public
