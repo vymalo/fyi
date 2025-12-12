@@ -5,81 +5,43 @@ on:
     types: [created]
   workflow_dispatch:
 
-env:
-  CARGO_TERM_COLOR: always
-  PACKAGE_NAME: vym-fyi-node
-  NODE_VERSION: "20"
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: full
-
 jobs:
   build-and-publish:
-    name: Build and publish
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-          cache-dependency-path: 'crates/vym-fyi-node/package-lock.json'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: x86_64-unknown-linux-gnu
-          profile: minimal
           override: true
 
-      - name: Cache Cargo
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev
+          sudo apt-get install -y build-essential
 
-      - name: Install napi-cli globally
-        run: npm install -g @napi-rs/cli
-
-      - name: Build the package
+      - name: Build and package
         working-directory: ./crates/vym-fyi-node
         run: |
-          echo "Node version: $(node --version)"
-          echo "npm version: $(npm --version)"
-          echo "Rust version: $(rustc --version)"
-          echo "Cargo version: $(cargo --version)"
-          
-          # Install dependencies
-          npm ci
-          
-          # Build with debug info
-          RUST_BACKTRACE=1 napi build --release --target x86_64-unknown-linux-gnu
-          
-          # Verify the built files
-          ls -la ./npm/
+          npm install
+          npm run build -- --target x86_64-unknown-linux-gnu
 
       - name: Publish to npm
         if: github.event_name == 'release'
-        working-directory: ./crates/vym-fyi-node/npm
+        working-directory: ./crates/vym-fyi-node
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          cd npm
           npm pkg set version="${GITHUB_REF#refs/tags/v}"
-          npm config set //registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN
-          npm whoami
-          npm publish --access public --provenance
+          npm publish --access public
