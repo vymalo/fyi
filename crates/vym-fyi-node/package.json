@@ -1,26 +1,40 @@
 {
-  "name": "@vym/fyi-node",
-  "version": "0.1.0",
+  "name": "@tegha-romeo/fyi-node",
+  "version": "0.1.2",
+  "description": "Node.js bindings for FYI",
   "main": "index.js",
-  "napi": {
-    "name": "vym-fyi-node",
-    "targets": ["x86_64-unknown-linux-gnu"]
-  },
+  "types": "index.d.ts",
   "files": [
     "index.js",
     "index.d.ts",
     "vym-fyi-node.linux-x64-gnu.node"
   ],
+  "napi": {
+    "name": "vym-fyi-node",
+    "targets": ["x86_64-unknown-linux-gnu"]
+  },
   "scripts": {
-    "build": "napi build --release",
-    "prepublishOnly": "napi prepublish -t npm"
+    "build": "napi build --release --target x86_64-unknown-linux-gnu && cp index.node vym-fyi-node.linux-x64-gnu.node",
+    "prepublishOnly": ""
   },
   "engines": {
     "node": ">= 16"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tegha-romeo/fyi/tree/main/crates/vym-fyi-node"
+  },
+  "keywords": [
+    "napi-rs",
+    "node-addon",
+    "rust"
+  ],
+  "author": "Tegha Romeo",
+  "license": "MIT",
   "devDependencies": {
     "@napi-rs/cli": "^3.5.0"
   }

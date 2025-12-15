@@ -29,20 +29,39 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential
 
-      - name: Build package
+      - name: Install and build package
         working-directory: ./crates/vym-fyi-node
         run: |
+          # Clean up previous builds
+          rm -rf node_modules package-lock.json npm
+
+          # Install dependencies
           npm install
-          napi build --release --target x86_64-unknown-linux-gnu
-          npx napi prepublish -t npm
-          ls -la npm/  # Verify the directory exists
+
+          # Build the package
+          npm run build
+
+          # Create necessary files
+          echo "const binary = require('./vym-fyi-node.linux-x64-gnu.node');\nmodule.exports = binary;" > index.js
+          echo "export function test(): void;" > index.d.ts
+
+          # Verify files
+          ls -la
 
       - name: Publish to npm
         if: github.event_name == 'release'
-        working-directory: ./crates/vym-fyi-node/npm
+        working-directory: ./crates/vym-fyi-node
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          # Set up npm authentication
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-          npm pkg set version="${GITHUB_REF#refs/tags/v}"
+
+          # Update version from tag if this is a release
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            npm version $VERSION --no-git-tag-version
+          fi
+
+          # Publish the package
           npm publish --access public

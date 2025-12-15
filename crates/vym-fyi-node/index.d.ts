@@ -16,12 +16,19 @@ export interface CrudOptions {
 }
 
 export interface LinkResponse {
-  slug: string
-  targetUrl: string
-  active: boolean
+  [key: string]: any;
 }
 
-export declare function listLinks(options: CrudOptions, input: ListLinksInput): Promise<Array<LinkResponse>>
+export interface CrudOptions {
+  base_url: string;
+  client_id: string;
+  api_key: string;
+  master_api_key?: string;
+}
+
+export function createLink(opts: CrudOptions, input: CreateLinkInput, useMaster?: boolean): Promise<LinkResponse>;
+
+export function listLinks(options: CrudOptions, input: ListLinksInput): Promise<Array<LinkResponse>>
 
 export interface ListLinksInput {
   page?: number
