@@ -18,7 +18,7 @@ serde_yaml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing", "net", "process", "fs"] }
 thiserror = "2"
 axum = { version = "0.8", features = ["json"] }
-axum-prometheus = "0.9"
+axum-prometheus = "0.10"
 tower = "0.5"
 metrics = "0.24"
 
